@@ -21,6 +21,7 @@ macse_launcher: macse
 remove_dups_bf: software/remove-duplicates/remove-duplicates.bf
 strike_ambigs_bf: scripts/strike-ambigs.bf
 label_tree_bf: software/LabelTrees/label-tree.bf
+label_gard_nexus_bf: scripts/label-gard-nexus.bf
 make_test_list_py: scripts/make_sequence_header_map.py
 tn93_cluster_py: scripts/tn93_cluster.py
 merge_fel_py: scripts/MergeFELResults.py

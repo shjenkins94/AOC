@@ -43,6 +43,7 @@ FASTTREE     = config.get("fasttree", "FastTree")
 REMOVE_DUPS_BF     = config.get("remove_dups_bf", "software/remove-duplicates/remove-duplicates.bf")
 STRIKE_AMBIGS_BF   = config.get("strike_ambigs_bf", "scripts/strike-ambigs.bf")
 LABEL_TREE_BF      = config.get("label_tree_bf", "software/LabelTrees/label-tree.bf")
+LABEL_GARD_NEXUS_BF = config.get("label_gard_nexus_bf", "scripts/label-gard-nexus.bf")
 
 MAKE_TEST_LIST_PY  = config.get("make_test_list_py", "scripts/make_sequence_header_map.py")
 TN93_CLUSTER_PY    = config.get("tn93_cluster_py", "scripts/tn93_cluster.py")
@@ -119,10 +120,8 @@ if missing:
 SAMPLES = samples_df["sample"].tolist()
 SEQUENCES = sequence_fastas_df["sequence"].tolist()
 
-# Which of these do I need?
 CODON_FASTA_BY_SEQUENCE = dict(zip(sequence_fastas_df["sequence"], sequence_fastas_df["codon_fasta"]))
 SEQUENCE_BY_SAMPLE = dict(zip(samples_df["sample"], samples_df["sequence"]))
-CODON_FASTA_BY_SAMPLE = dict(zip(samples_df["sample"], [CODON_FASTA_BY_SEQUENCE.get(s, "") for s in samples_df["sequence"]]))
 
 LABELS_CSV_BY_SAMPLE  = dict(zip(samples_df["sample"], samples_df["sequence_labels_csv"]))
 
@@ -284,12 +283,14 @@ def _branch_arg(sample):
 
 rule all:
     input:
-        # expand(os.path.join(str(OUTROOT), "{sequence}", "{sequence}.RD.SA.codons.cln.fa"), sequence=SEQUENCES),
-        # expand(os.path.join(str(OUTROOT), "{sequence}", "{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard"), sequence=SEQUENCES),
+        expand(os.path.join(str(OUTROOT), "{sequence}", "{sequence}.RD.SA.codons.cln.fa"), sequence=SEQUENCES),
+        expand(os.path.join(str(OUTROOT), "{sequence}", "{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard"), sequence=SEQUENCES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "selection", "ALL_PARTITIONS.done"), sample=SAMPLES),
         expand(os.path.join(str(OUTROOT), "{sample}", "{sample}.test_sequences.txt"), sample=SAMPLES_WITH_LABELS),
         expand(os.path.join(str(OUTROOT), "{sample}", "{sample}.sequence_header_map.csv"), sample=SAMPLES_WITH_LABELS),
-        expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_FEL_Results.csv"), sample=SAMPLES),
+        expand(os.path.join(str(OUTROOT), "{sample}", "selection", "all_partitions.{analysis}}.json"), sample=SAMPLES, analysis=["FEL", "MEME", "BUSTEDS-MH", "RELAX"]
+        )
+        # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_FEL_Results.csv"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_MEME_Results.csv"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_ABSREL_Results.csv"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_BUSTEDS-MH_Results.csv"), sample=SAMPLES),
@@ -645,6 +646,98 @@ checkpoint parse_gard:
 
         with open(output.manifest, "w") as fh:
             json.dump(manifest, fh, indent=2)
+
+###############################################################################
+# Selection analysis per sample (all partitions)
+###############################################################################
+rule label_tree_TestForeground_all_partitions:
+    input:
+        bestgard=rules.recombination.output.bestgard,
+        test_list=_test_list_for_sample
+    output:
+        labelgard=os.path.join(str(OUTROOT), "{sample}", "{sample}.RD.SA.codons.cln.fa.cluster.fasta.best-gard.labelled),
+    log:
+        os.path.join(LOGDIR, "label_tree_TestForeground_all_partitions.{sample}.log")
+    shell:
+        r"""
+        {HYPHY} {LABEL_GARD_NEXUS_BF} {input.bestgard} --list {input.test_list} --output {output.tree} --label Test > {log} 2>&1
+        """
+
+rule FEL_all_partitions:
+    input:
+        aln=rules.label_tree_TestForeground_all_partitions.output.labelgard
+    output:
+        json=os.path.join(str(OUTROOT), "{sample}", "selection", "all_partitions.FEL.json")
+    params:
+        branch_arg=lambda wc: _branch_arg(wc.sample)
+    log:
+        os.path.join(LOGDIR, "FEL_partition.{sample}.all_partitions.log")
+    shell:
+        r"""
+        {HYPHY} FEL --alignment {input.aln} --output {output.json} --ci Yes {params.branch_arg} > {log} 2>&1
+        """
+
+rule MEME_all_partitions:
+    input:
+        aln=rules.label_tree_TestForeground_all_partitions.output.labelgard
+    output:
+        json=os.path.join(str(OUTROOT), "{sample}", "selection", "all_partitions.MEME.json")
+    params:
+        branch_arg=lambda wc: _branch_arg(wc.sample)
+    log:
+        os.path.join(LOGDIR, "MEME_partition.{sample}.all_partitions.log")
+    shell:
+        r"""
+        {HYPHY} MEME --alignment {input.aln} --output {output.json} {params.branch_arg} ENV='TOLERATE_NUMERICAL_ERRORS=1;' > {log} 2>&1
+        """
+
+rule BUSTEDS_MH_all_partitions:
+    input:
+        aln=rules.label_tree_TestForeground_all_partitions.output.labelgard
+    output:
+        json=os.path.join(str(OUTROOT), "{sample}", "selection", "all_partitions.BUSTEDS-MH.json")
+    params:
+        branch_arg=lambda wc: _branch_arg(wc.sample)
+    log:
+        os.path.join(LOGDIR, "BUSTEDS_MH_partition.{sample}.all_partitions.log")
+    shell:
+        r"""
+        {HYPHY} BUSTED \
+          --alignment {input.aln} \
+          --output {output.json} \
+          --srv Yes \
+          --multiple-hits Double+Triple \
+          {params.branch_arg} \
+          > {log} 2>&1
+        """
+
+rule RELAX_all_partitions:
+    input:
+        aln=rules.label_tree_TestForeground_all_partitions.output.labelgard,
+        test_list=_test_list_for_sample
+    output:
+        json=os.path.join(str(OUTROOT), "{sample}", "selection", "all_partitions.RELAX.json")
+    log:
+        os.path.join(LOGDIR, "RELAX_partition.{sample}.all_partitions.log")
+    run:
+        os.makedirs(os.path.dirname(output.json), exist_ok=True)
+        logp = log[0] if hasattr(log, "__iter__") else str(log)
+        with open(logp, "a") as L:
+            L.write("START\n")
+        if (not os.path.exists(input.test_list)) or (os.path.getsize(input.test_list) == 0):
+            with open(output.json, "w") as fh:
+                json.dump({"skipped": True, "reason": "empty_or_missing_test_list"}, fh, indent=2)
+            with open(logp, "a") as L:
+                L.write("Skipped (no test list)\nEND\n")
+        else:
+            shell(
+                f"{HYPHY} RELAX --alignment {input.aln} "
+                f"--output {output.json} --test Test --reference Background "
+                f"> {logp} 2>&1"
+            )
+            with open(logp, "a") as L:
+                L.write("END\n")
+
 
 ###############################################################################
 # Dynamic fan-out utilities (for partitions)
