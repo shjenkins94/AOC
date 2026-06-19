@@ -272,6 +272,13 @@ def _branch_arg(sample):
         return "--branches Test"
     return ""
 
+# Seems like nexus files get imported with all-uppercase labels, so also check for uppercase "TEST"
+def _branch_arg_all_partitions(sample):
+    p = test_list_file(sample)
+    if os.path.exists(p) and os.path.getsize(p) > 0:
+        return "--branches TEST"
+    return ""
+
 ###############################################################################
 # Rule all
 ###############################################################################
@@ -288,8 +295,7 @@ rule all:
         # expand(os.path.join(str(OUTROOT), "{sample}", "selection", "ALL_PARTITIONS.done"), sample=SAMPLES),
         expand(os.path.join(str(OUTROOT), "{sample}", "{sample}.test_sequences.txt"), sample=SAMPLES_WITH_LABELS),
         expand(os.path.join(str(OUTROOT), "{sample}", "{sample}.sequence_header_map.csv"), sample=SAMPLES_WITH_LABELS),
-        expand(os.path.join(str(OUTROOT), "{sample}", "selection", "all_partitions.{analysis}}.json"), sample=SAMPLES, analysis=["FEL", "MEME", "BUSTEDS-MH", "RELAX"]
-        )
+        expand(os.path.join(str(OUTROOT), "{sample}", "selection", "all_partitions.{analysis}.json"), sample=SAMPLES, analysis=["FEL", "MEME", "BUSTEDS-MH", "RELAX"])
         # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_FEL_Results.csv"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_MEME_Results.csv"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_ABSREL_Results.csv"), sample=SAMPLES),
@@ -321,6 +327,11 @@ ruleorder:
     BUSTEDS_MH_partition >
     RELAX_partition >
     CFEL_partition >
+    label_tree_TestForeground_all_partitions >
+    FEL_all_partitions >
+    MEME_all_partitions >
+    BUSTEDS_MH_all_partitions >
+    RELAX_all_partitions >
     run_selection_all_partitions >
     PlotFEL_partition >
     PlotMEME_partition >
@@ -652,16 +663,29 @@ checkpoint parse_gard:
 ###############################################################################
 rule label_tree_TestForeground_all_partitions:
     input:
-        bestgard=rules.recombination.output.bestgard,
+        bestgard=lambda wc:expand(os.path.join(str(OUTROOT), "{sequence}", "{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard"), sequence=SEQUENCE_BY_SAMPLE[wc.sample]),
         test_list=_test_list_for_sample
     output:
-        labelgard=os.path.join(str(OUTROOT), "{sample}", "{sample}.RD.SA.codons.cln.fa.cluster.fasta.best-gard.labelled),
+        labelgard=os.path.join(str(OUTROOT), "{sample}", "{sample}.RD.SA.codons.cln.fa.cluster.fasta.best-gard.labelled"),
     log:
         os.path.join(LOGDIR, "label_tree_TestForeground_all_partitions.{sample}.log")
-    shell:
-        r"""
-        {HYPHY} {LABEL_GARD_NEXUS_BF} {input.bestgard} --list {input.test_list} --output {output.tree} --label Test > {log} 2>&1
-        """
+    run:
+        logp = log[0] if hasattr(log, "__iter__") else str(log)
+        with open(logp, "a") as L:
+            L.write("START\n")
+        if (not os.path.exists(input.test_list)) or (os.path.getsize(input.test_list) == 0):
+            shell(f"cp {input.bestgard} {output.labelgard}")
+            with open(logp, "a") as L:
+                L.write("No test list, using best-gard file directly\nEND\n")
+        else:
+            shell(
+                f"{HYPHY} {LABEL_GARD_NEXUS_BF} {input.bestgard} "
+                f"--list {input.test_list} --output {output.labelgard} "
+                f"--label Test > {log} 2>&1"
+            )
+            with open(logp, "a") as L:
+                L.write("END\n")
+            
 
 rule FEL_all_partitions:
     input:
@@ -669,7 +693,7 @@ rule FEL_all_partitions:
     output:
         json=os.path.join(str(OUTROOT), "{sample}", "selection", "all_partitions.FEL.json")
     params:
-        branch_arg=lambda wc: _branch_arg(wc.sample)
+        branch_arg=lambda wc: _branch_arg_all_partitions(wc.sample)
     log:
         os.path.join(LOGDIR, "FEL_partition.{sample}.all_partitions.log")
     shell:
@@ -683,7 +707,7 @@ rule MEME_all_partitions:
     output:
         json=os.path.join(str(OUTROOT), "{sample}", "selection", "all_partitions.MEME.json")
     params:
-        branch_arg=lambda wc: _branch_arg(wc.sample)
+        branch_arg=lambda wc: _branch_arg_all_partitions(wc.sample)
     log:
         os.path.join(LOGDIR, "MEME_partition.{sample}.all_partitions.log")
     shell:
@@ -697,7 +721,7 @@ rule BUSTEDS_MH_all_partitions:
     output:
         json=os.path.join(str(OUTROOT), "{sample}", "selection", "all_partitions.BUSTEDS-MH.json")
     params:
-        branch_arg=lambda wc: _branch_arg(wc.sample)
+        branch_arg=lambda wc: _branch_arg_all_partitions(wc.sample)
     log:
         os.path.join(LOGDIR, "BUSTEDS_MH_partition.{sample}.all_partitions.log")
     shell:
@@ -732,7 +756,7 @@ rule RELAX_all_partitions:
         else:
             shell(
                 f"{HYPHY} RELAX --alignment {input.aln} "
-                f"--output {output.json} --test Test --reference Background "
+                f"--output {output.json} --test TEST "
                 f"> {logp} 2>&1"
             )
             with open(logp, "a") as L:
