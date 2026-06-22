@@ -142,11 +142,6 @@ def labels_csv_path(sample):
         return ""
     return os.path.join(BASEDIR, str(v))
 
-SAMPLES_WITH_LABELS = [
-    s for s in SAMPLES
-    if (not _is_missing(LABELS_CSV_BY_SAMPLE.get(s, None))) and os.path.exists(labels_csv_path(s))
-]
-
 ###############################################################################
 # Path helpers
 ###############################################################################
@@ -261,10 +256,10 @@ def _ensure_empty_test_list(sample):
     return p
 
 def _test_list_for_sample(wc):
-    p = test_list_file(wc.sample)
-    if os.path.exists(p):
-        return p
-    return _ensure_empty_test_list(wc.sample)
+    if (not _is_missing(LABELS_CSV_BY_SAMPLE.get(wc.sample, None))) and os.path.exists(labels_csv_path(wc.sample)):
+        return test_list_file(wc.sample)
+    else:
+        return _ensure_empty_test_list(wc.sample)
 
 def _branch_arg(sample):
     p = test_list_file(sample)
@@ -290,11 +285,11 @@ def _branch_arg_all_partitions(sample):
 
 rule all:
     input:
-        expand(os.path.join(str(OUTROOT), "{sequence}", "{sequence}.RD.SA.codons.cln.fa"), sequence=SEQUENCES),
-        expand(os.path.join(str(OUTROOT), "{sequence}", "{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard"), sequence=SEQUENCES),
+        # expand(os.path.join(str(OUTROOT), "{sequence}", "{sequence}.RD.SA.codons.cln.fa"), sequence=SEQUENCES),
+        # expand(os.path.join(str(OUTROOT), "{sequence}", "{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard"), sequence=SEQUENCES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "selection", "ALL_PARTITIONS.done"), sample=SAMPLES),
-        expand(os.path.join(str(OUTROOT), "{sample}", "{sample}.test_sequences.txt"), sample=SAMPLES_WITH_LABELS),
-        expand(os.path.join(str(OUTROOT), "{sample}", "{sample}.sequence_header_map.csv"), sample=SAMPLES_WITH_LABELS),
+        # expand(os.path.join(str(OUTROOT), "{sample}", "{sample}.test_sequences.txt"), sample=SAMPLES_WITH_LABELS),
+        # expand(os.path.join(str(OUTROOT), "{sample}", "{sample}.sequence_header_map.csv"), sample=SAMPLES_WITH_LABELS),
         expand(os.path.join(str(OUTROOT), "{sample}", "selection", "all_partitions.{analysis}.json"), sample=SAMPLES, analysis=["FEL", "MEME", "BUSTEDS-MH", "RELAX"])
         # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_FEL_Results.csv"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_MEME_Results.csv"), sample=SAMPLES),
