@@ -6,8 +6,8 @@
 # - optional MACSE memory settings on large alignments
 
 # Core inputs / outputs
-samples_csv: samples.csv
-sequence_fastas_csv: sequence_fastas.csv
+samples_csv: config/aoc_samples.csv
+sequence_fastas_csv: config/aoc_sequences.csv
 outdir: results
 
 # External executables

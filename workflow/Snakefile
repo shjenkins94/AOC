@@ -240,8 +240,41 @@ def _read_json(path):
 def _hyphy_headers(data):
     return [x[0] for x in data["MLE"]["headers"]]
 
-def _hyphy_content_table(data):
-    return data["MLE"]["content"]["0"]
+def _hyphy_content_table(data, part="0"):
+    return data["MLE"]["content"][str(part)]
+
+def _count_branches(data):
+    branch_count = { 
+        "tested": None,
+        "background": None
+    }
+    # get tested and background 
+    tested = data.get("tested", None)
+    background = data.get("background", None)
+    # if background is a list, count the number of branches in each category
+    if isinstance(background, list):
+        branch_count["tested"] = len(tested)
+        branch_count["background"] = len(background)
+    # if background is an int we need to go into tested
+    if isinstance(background, int):
+        # single partition.
+        if len(tested) == 1:
+            branch_count["tested"] = sum(1 for v in tested["0"].values() if v == "test")
+            branch_count["background"] = len(tested) - branch_count["tested"]
+            return branch_count
+        if len(tested) > 1:
+            tested_counts = []
+            background_counts = []
+            for part in tested:
+                part_test_count = sum(1 for v in tested[part].values() if v == "test")
+                part_background_count = len(tested[part]) - part_test_count
+                tested_counts.append(str(part_test_count))
+                background_counts.append(str(part_background_count))
+            branch_count["tested"] = ",".join(tested_counts)
+            branch_count["background"] = ",".join(background_counts)
+            return branch_count
+    else:
+        return branch_count
 
 ###############################################################################
 # Utility: ensure empty test list exists for unlabeled samples
@@ -290,14 +323,14 @@ rule all:
         # expand(os.path.join(str(OUTROOT), "{sample}", "selection", "ALL_PARTITIONS.done"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "{sample}.test_sequences.txt"), sample=SAMPLES_WITH_LABELS),
         # expand(os.path.join(str(OUTROOT), "{sample}", "{sample}.sequence_header_map.csv"), sample=SAMPLES_WITH_LABELS),
-        expand(os.path.join(str(OUTROOT), "{sample}", "selection", "all_partitions.{analysis}.json"), sample=SAMPLES, analysis=["FEL", "MEME", "BUSTEDS-MH", "RELAX"])
+        expand(os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.all_partitions.{analysis}.json"), sample=SAMPLES, analysis=["FEL", "MEME", "BUSTEDS-MH", "RELAX"]),
         # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_FEL_Results.csv"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_MEME_Results.csv"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_ABSREL_Results.csv"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_BUSTEDS-MH_Results.csv"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_RELAX_Results.csv"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_CFEL_Results.csv"), sample=SAMPLES),
-        # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.selection_overview.csv"), sample=SAMPLES),
+        expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.selection_overview_all_partitions.csv"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "visualizations", "{sample}.FEL.merged.png"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "visualizations", "{sample}.MEME.merged.png"), sample=SAMPLES)
 
@@ -686,7 +719,7 @@ rule FEL_all_partitions:
     input:
         aln=rules.label_tree_TestForeground_all_partitions.output.labelgard
     output:
-        json=os.path.join(str(OUTROOT), "{sample}", "selection", "all_partitions.FEL.json")
+        json=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.all_partitions.FEL.json")
     params:
         branch_arg=lambda wc: _branch_arg_all_partitions(wc.sample)
     log:
@@ -700,7 +733,7 @@ rule MEME_all_partitions:
     input:
         aln=rules.label_tree_TestForeground_all_partitions.output.labelgard
     output:
-        json=os.path.join(str(OUTROOT), "{sample}", "selection", "all_partitions.MEME.json")
+        json=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.all_partitions.MEME.json")
     params:
         branch_arg=lambda wc: _branch_arg_all_partitions(wc.sample)
     log:
@@ -714,7 +747,7 @@ rule BUSTEDS_MH_all_partitions:
     input:
         aln=rules.label_tree_TestForeground_all_partitions.output.labelgard
     output:
-        json=os.path.join(str(OUTROOT), "{sample}", "selection", "all_partitions.BUSTEDS-MH.json")
+        json=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.all_partitions.BUSTEDS-MH.json")
     params:
         branch_arg=lambda wc: _branch_arg_all_partitions(wc.sample)
     log:
@@ -735,7 +768,7 @@ rule RELAX_all_partitions:
         aln=rules.label_tree_TestForeground_all_partitions.output.labelgard,
         test_list=_test_list_for_sample
     output:
-        json=os.path.join(str(OUTROOT), "{sample}", "selection", "all_partitions.RELAX.json")
+        json=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.all_partitions.RELAX.json")
     log:
         os.path.join(LOGDIR, "RELAX_partition.{sample}.all_partitions.log")
     run:
@@ -1097,6 +1130,110 @@ rule PlotMEME_partition:
                 f"MEME identified {len(sig)} significant codon sites in {wildcards.sample} partition {wildcards.part} at FDR <= 0.10, consistent with episodic selection along a subset of branches.\n"
             )
 
+rule PlotFEL_all_partitions:
+    input:
+        json=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.all_partitions.FEL.json")
+    output:
+        output_csv=os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.all_partitions.AOC.FEL_Results.csv"),
+        output_png=os.path.join(str(OUTROOT), "{sample}", "visualizations", "{sample}.all_partitions.FEL.png"),
+        output_svg=os.path.join(str(OUTROOT), "{sample}", "visualizations", "{sample}.all_partitions.FEL.svg"),
+        output_figureLegend=os.path.join(str(OUTROOT), "{sample}", "visualizations", "{sample}.all_partitions.FEL.figure_legend.txt")
+    log:
+        os.path.join(LOGDIR, "PlotFEL_partition.{sample}.all_partitions.log")
+    run:
+        data = _read_json(input.json)
+        headers = _hyphy_headers(data)
+
+        all_dfs = []
+        for part in data["MLE"]["content"]:
+            df = pd.DataFrame(_hyphy_content_table(data, part), columns=headers, dtype=float)
+            df.insert(0, 'Partition', int(part) +1)
+            df.insert(0, "Sample", wildcards.sample)
+            all_dfs.append(df)
+
+        merged_df = pd.concat(all_dfs, ignore_index=True) if all_dfs else pd.DataFrame(columns=['Sample','Partition'])
+        merged_df.index += 1
+        merged_df["CodonSite"] = merged_df.index
+        merged_df["adjusted_p-value"] = _safe_fdrcorrection(merged_df["p-value"].tolist(), alpha=0.10)
+        
+        merged_df.to_csv(output.output_csv, index=False)
+
+        source = merged_df.copy().dropna().rename(columns={"p-value": "p_value", "adjusted_p-value": "adjusted_p_value"})
+        line = alt.Chart(source).mark_circle(clip=True, opacity=0.9, size=70).encode(
+            x=alt.X("CodonSite:Q", title="Codon site"),
+            y=alt.Y("dN/dS MLE:Q", title="dN/dS estimate", scale=alt.Scale(domain=(0, 5), clamp=True, nice=False, type="sqrt")),
+            color=alt.condition("datum.adjusted_p_value <= 0.1", alt.value("red"), alt.value("lightgray")),
+            tooltip=["CodonSite", "alpha", "beta", "dN/dS MLE", "p_value", "adjusted_p_value"]
+        ).properties(width=900, height=450, title=f"FEL: {wildcards.sample}")
+        band = alt.Chart(source).mark_area(opacity=0.25).encode(x="CodonSite:Q", y="dN/dS LB:Q", y2="dN/dS UB:Q")
+        chart = band + line
+        save_altair_with_vl_convert(chart, svg_path=output.output_svg, png_path=output.output_png, scale=2)
+
+        sig = merged_df[merged_df["adjusted_p-value"] <= 0.10]
+        pos = sig[sig["dN/dS MLE"] > 1.0]
+        neg = sig[sig["dN/dS MLE"] < 1.0]
+        with open(output.output_figureLegend, "w") as fh:
+            fh.write(
+                f"FEL identified {len(sig)} significant codon sites in {wildcards.sample} at FDR <= 0.10, including {len(pos)} sites with dN/dS > 1 and {len(neg)} sites with dN/dS < 1.\n"
+            )
+
+rule PlotMEME_all_partitions:
+    input:
+        json=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.all_partitions.MEME.json")
+    output:
+        output_csv=os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.all_partitions.AOC.MEME_Results.csv"),
+        output_png=os.path.join(str(OUTROOT), "{sample}", "visualizations", "{sample}.all_partitions.MEME.png"),
+        output_svg=os.path.join(str(OUTROOT), "{sample}", "visualizations", "{sample}.all_partitions.MEME.svg"),
+        output_figureLegend=os.path.join(str(OUTROOT), "{sample}", "visualizations", "{sample}.all_partitions.MEME.figure_legend.txt")
+    log:
+        os.path.join(LOGDIR, "PlotMEME_partition.{sample}.all_partitions.log")
+    run:
+        data = _read_json(input.json)
+        headers = _hyphy_headers(data)
+
+        all_dfs = []
+        for part in data["MLE"]["content"]:
+            df = pd.DataFrame(_hyphy_content_table(data, part), columns=headers, dtype=float)
+            df.insert(0, 'Partition', int(part) +1)
+            df.insert(0, "Sample", wildcards.sample)
+            all_dfs.append(df)
+
+        merged_df = pd.concat(all_dfs, ignore_index=True) if all_dfs else pd.DataFrame(columns=['Sample','Partition'])
+        merged_df.index += 1
+        merged_df["CodonSite"] = merged_df.index
+        merged_df["adjusted_p-value"] = _safe_fdrcorrection(merged_df["p-value"].tolist(), alpha=0.10)
+        
+        merged_df.to_csv(output.output_csv, index=False)
+
+
+        source = merged_df.copy().rename(columns={
+            "p-value": "p_value",
+            "adjusted_p-value": "adjusted_p_value",
+            "beta+": "beta_plus"
+        })
+
+        tooltip_fields = [alt.Tooltip("CodonSite:Q", title="Codon site")]
+        if "alpha" in source.columns:
+            tooltip_fields.append(alt.Tooltip("alpha:Q", title="alpha"))
+        if "beta_plus" in source.columns:
+            tooltip_fields.append(alt.Tooltip("beta_plus:Q", title="beta+"))
+        if "p_value" in source.columns:
+            tooltip_fields.append(alt.Tooltip("p_value:Q", title="p-value"))
+        tooltip_fields.append(alt.Tooltip("adjusted_p_value:Q", title="adjusted p-value"))
+
+        chart = alt.Chart(source).mark_point(size=55).encode(
+            x=alt.X("CodonSite:Q", title="Codon site"),
+            y=alt.Y("adjusted_p_value:Q", title="Adjusted p-value"),
+            color=alt.Color("adjusted_p_value:Q", scale=alt.Scale(scheme="reds", reverse=True)),
+            tooltip=tooltip_fields
+        ).properties(width=900, height=450, title=f"MEME: {wildcards.sample}")
+        save_altair_with_vl_convert(chart, svg_path=output.output_svg, png_path=output.output_png, scale=2)
+
+        sig = merged_df[merged_df["adjusted_p-value"] <= 0.10]
+        with open(output.output_figureLegend, "w") as fh:
+            fh.write(
+                f"MEME identified {len(sig)} significant codon sites in {wildcards.sample} at FDR <= 0.10, consistent with episodic selection along a subset of branches.\n"
+            )
 
 ###############################################################################
 # Additional selection-analysis tables
@@ -1323,6 +1460,120 @@ rule TableCFEL_partition:
         df.to_csv(output.csv, index=False)
 
 
+rule TableBUSTEDS_MH_all_partitions:
+    input:
+        json=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.all_partitions.BUSTEDS-MH.json")
+    output:
+        csv=os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.all_partitions.AOC.BUSTEDS-MH_Results.csv")
+    log:
+        os.path.join(LOGDIR, "TableBUSTEDS_MH_partition.{sample}.all_partitions.log")
+    run:
+        data = _read_json(input.json)
+
+        rows = []
+
+        if data.get("skipped"):
+            rows.append({
+                "Sample": wildcards.sample,
+                "Partition": None,
+                "test": "BUSTEDS-MH",
+                "p_value": None,
+                "LRT": None,
+                "tested_branches": None,
+                "background_branches": None,
+                "status": "skipped"
+            })
+
+        else:
+
+            # -------------------------------
+            # test results
+            # -------------------------------
+
+            tr = data.get("test results", {})
+            pval = tr.get("p-value", None)
+            lrt = tr.get("LRT", None)
+
+            # -------------------------------
+            # tested/background branches
+            # structure differs across HyPhy versions
+            # -------------------------------
+
+            branch_counts = _count_branches(data)
+
+            rows.append({
+                "Sample": wildcards.sample,
+                "Partition": int(wildcards.part),
+                "test": "BUSTEDS-MH",
+                "p_value": pval,
+                "LRT": lrt,
+                "tested_branches": branch_counts["tested"],
+                "background_branches": branch_counts["background"],
+                "status": "ok"
+            })
+
+        df = pd.DataFrame(rows)
+
+        os.makedirs(os.path.dirname(output.csv), exist_ok=True)
+        df.to_csv(output.csv, index=False)
+
+
+rule TableRELAX_all_partitions:
+    input:
+        json=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.all_partitions.RELAX.json")
+    output:
+        csv=os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.all_partitions.AOC.RELAX_Results.csv")
+    log:
+        os.path.join(LOGDIR, "TableRELAX_all_partitions.{sample}.all_partitions.log")
+    run:
+        data = _read_json(input.json)
+
+        rows = []
+
+        if data.get("skipped"):
+            rows.append({
+                "Sample": wildcards.sample,
+                "Partition": None,
+                "test": "RELAX",
+                "k": None,
+                "p_value": None,
+                "LRT": None,
+                "selection_shift": None,
+                "status": "skipped"
+            })
+
+        else:
+            tr = data.get("test results", {})
+            k = tr.get("relaxation or intensification parameter", None)
+
+            try:
+                k_num = float(k)
+            except (TypeError, ValueError):
+                k_num = None
+
+            if k_num is None:
+                shift = None
+            elif k_num > 1:
+                shift = "intensified"
+            elif k_num < 1:
+                shift = "relaxed"
+            else:
+                shift = "no_change"
+
+            rows = [{
+                "Sample": wildcards.sample,
+                "Partition": int(wildcards.part),
+                "test": "RELAX",
+                "k": k,
+                "p_value": tr.get("p-value", None),
+                "LRT": tr.get("LRT", None),
+                "selection_shift": shift,
+                "status": "ok"
+            }]
+
+        df = pd.DataFrame(rows)
+        os.makedirs(os.path.dirname(output.csv), exist_ok=True)
+        df.to_csv(output.csv, index=False)
 
 rule MergeFELCSVs:
     input:
@@ -1604,6 +1855,112 @@ rule SelectionOverviewTable:
                     "metric": "significant_sites_p_0.10",
                     "value": sig
                 })
+
+        out = pd.DataFrame(rows, columns=["sample", "partition", "method", "metric", "value"])
+        os.makedirs(os.path.dirname(output.csv), exist_ok=True)
+        out.to_csv(output.csv, index=False)
+
+rule SelectionOverviewTable_all_partitions:
+    input:
+        fel=os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.all_partitions.AOC.FEL_Results.csv"),
+        meme=os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.all_partitions.AOC.MEME_Results.csv"),
+        busted=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.all_partitions.BUSTEDS-MH.json"),
+        relax=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.all_partitions.RELAX.json")
+    output:
+        csv=os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.selection_overview_all_partitions.csv")
+    log:
+        os.path.join(LOGDIR, "SelectionOverviewTable.{sample}.all_partitions.log")
+    run:
+        rows = []
+
+        fel = pd.read_csv(input.fel)
+        meme = pd.read_csv(input.meme)
+
+        if not fel.empty:
+            if "adjusted_p-value" in fel.columns and "Partition" in fel.columns:
+                fel["adjusted_p-value"] = pd.to_numeric(fel["adjusted_p-value"], errors="coerce")
+                for part, subdf in fel.groupby("Partition"):
+                    rows.append({
+                        "sample": wildcards.sample,
+                        "partition": part,
+                        "method": "FEL",
+                        "metric": "significant_sites_FDR_0.10",
+                        "value": int((subdf["adjusted_p-value"] <= 0.10).sum())
+                    })
+            else:
+                rows.append({
+                    "sample": wildcards.sample,
+                    "partition": "all",
+                    "method": "FEL",
+                    "metric": "significant_sites_FDR_0.10",
+                    "value": 0
+                })
+
+        if not meme.empty:
+            if "adjusted_p-value" in meme.columns and "Partition" in meme.columns:
+                meme["adjusted_p-value"] = pd.to_numeric(meme["adjusted_p-value"], errors="coerce")
+                for part, subdf in meme.groupby("Partition"):
+                    rows.append({
+                        "sample": wildcards.sample,
+                        "partition": part,
+                        "method": "MEME",
+                        "metric": "significant_sites_FDR_0.10",
+                        "value": int((subdf["adjusted_p-value"] <= 0.10).sum())
+                    })
+            else:
+                rows.append({
+                    "sample": wildcards.sample,
+                    "partition": "all",
+                    "method": "MEME",
+                    "metric": "significant_sites_FDR_0.10",
+                    "value": 0
+                })
+
+        busted_data = _read_json(input.busted)
+        if busted_data.get("skipped"):
+            rows.append({
+                "sample": wildcards.sample,
+                "partition": None,
+                "method": "BUSTEDS-MH",
+                "metric": "status",
+                "value": "skipped"
+            })
+        else:
+            pval = busted_data.get("test results", {}).get("p-value", None)
+            rows.append({
+                "sample": wildcards.sample,
+                "partition": "All",
+                "method": "BUSTEDS-MH",
+                "metric": "gene_wide_pvalue",
+                "value": pval
+            })
+
+        relax_data = _read_json(input.relax)
+
+        if relax_data.get("skipped"):
+            rows.append({
+                "sample": wildcards.sample,
+                "partition": None,
+                "method": "RELAX",
+                "metric": "status",
+                "value": "skipped"
+            })
+        else:
+            tr = relax_data.get("test results", {})
+            rows.append({
+                "sample": wildcards.sample,
+                "partition": "All",
+                "method": "RELAX",
+                "metric": "k",
+                "value": tr.get("relaxation or intensification parameter", None)
+            })
+            rows.append({
+                "sample": wildcards.sample,
+                "partition": "All",
+                "method": "RELAX",
+                "metric": "pvalue",
+                "value": tr.get("p-value", None)
+            })
 
         out = pd.DataFrame(rows, columns=["sample", "partition", "method", "metric", "value"])
         os.makedirs(os.path.dirname(output.csv), exist_ok=True)

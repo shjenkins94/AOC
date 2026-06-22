@@ -16,3 +16,5 @@ workflow/notebooks/.ipynb_checkpoints/**
 **/.Rproj.user/**
 **/.RData
 **/Rplots.pdf
+data/codon_fasta
+data/sample_labels
