@@ -84,6 +84,7 @@ MACSE_RUNNER = config.get(
     "macse_runner", workflow.source_path("scripts/run_macse_with_heap.sh")
 )
 
+
 def _coerce_int(value):
     try:
         return int(str(value).strip())
@@ -147,9 +148,13 @@ if missing_seq:
 SAMPLES = samples_df["sample"].tolist()
 SEQUENCES = sequences_df["sequence"].tolist()
 
-CODON_FASTA_BY_SEQUENCE = dict(zip(sequences_df["sequence"], sequences_df["codon_fasta"]))
+CODON_FASTA_BY_SEQUENCE = dict(
+    zip(sequences_df["sequence"], sequences_df["codon_fasta"])
+)
 SEQUENCE_BY_SAMPLE = dict(zip(samples_df["sample"], samples_df["sequence"]))
-LABELS_CSV_BY_SAMPLE  = dict(zip(samples_df["sample"], samples_df["sequence_labels_csv"]))
+LABELS_CSV_BY_SAMPLE = dict(
+    zip(samples_df["sample"], samples_df["sequence_labels_csv"])
+)
 
 
 def _is_missing(x):
@@ -171,20 +176,25 @@ def labels_csv_path(sample):
         return ""
     return os.path.join(BASEDIR, str(v))
 
+
 ###############################################################################
 # Path helpers
 ###############################################################################
 
 # Per sequence paths
 
+
 def sequence_dir(sequence):
     return os.path.join(str(OUTROOT_SEQUENCE), sequence)
+
 
 def gard_dir(sequence):
     return os.path.join(sequence_dir(sequence), "gard")
 
+
 def gard_segments_dir(sequence):
     return os.path.join(gard_dir(sequence), "segments")
+
 
 # Per sample paths
 def sample_dir(sample):
@@ -560,7 +570,9 @@ rule cln:
     input:
         codons=rules.macse.output.codons,
     output:
-        cln=os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.codons.cln.fa"),
+        cln=os.path.join(
+            str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.codons.cln.fa"
+        ),
     log:
         os.path.join(LOGDIR, "cln.{sequence}.log"),
     shell:
@@ -573,7 +585,9 @@ rule strike_ambigs_msa:
     input:
         cln=rules.cln.output.cln,
     output:
-        sa=os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.SA.codons.cln.fa"),
+        sa=os.path.join(
+            str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.SA.codons.cln.fa"
+        ),
     log:
         os.path.join(LOGDIR, "strike_ambigs_msa.{sequence}.log"),
     shell:
@@ -586,7 +600,9 @@ rule remove_duplicates_msa:
     input:
         sa=rules.strike_ambigs_msa.output.sa,
     output:
-        rd=os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.RD.SA.codons.cln.fa"),
+        rd=os.path.join(
+            str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.RD.SA.codons.cln.fa"
+        ),
     log:
         os.path.join(LOGDIR, "remove_duplicates_msa.{sequence}.log"),
     shell:
@@ -600,10 +616,14 @@ rule tn93_cluster:
         rd=rules.remove_duplicates_msa.output.rd,
     output:
         cluster_json=os.path.join(
-            str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.RD.SA.codons.cln.fa.cluster.json"
+            str(OUTROOT_SEQUENCE),
+            "{sequence}",
+            "{sequence}.RD.SA.codons.cln.fa.cluster.json",
         ),
         cluster_fasta=os.path.join(
-            str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.RD.SA.codons.cln.fa.cluster.fasta"
+            str(OUTROOT_SEQUENCE),
+            "{sequence}",
+            "{sequence}.RD.SA.codons.cln.fa.cluster.fasta",
         ),
     log:
         os.path.join(LOGDIR, "tn93_cluster.{sequence}.log"),
@@ -636,10 +656,14 @@ rule recombination:
             "{sequence}",
             "{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
         ),
-    params:
-        hyphy_command=lambda wildcards, resources:f"{resources.mpi} -n {resources.tasks} {HYPHYMPI}" if config.get("use_mpi", False) else HYPHY,
     log:
         os.path.join(LOGDIR, "recombination.{sequence}.log"),
+    params:
+        hyphy_command=lambda wildcards, resources: (
+            f"{resources.mpi} -n {resources.tasks} {HYPHYMPI}"
+            if config.get("use_mpi", False)
+            else HYPHY
+        ),
     shell:
         r"""
         {params.hyphy_command} GARD --alignment {input.msa} --rv GDD --output {output.gard_json} --mode Faster ENV='TOLERATE_NUMERICAL_ERRORS=1;' \
@@ -676,8 +700,12 @@ checkpoint parse_gard:
         bestgard=rules.recombination.output.bestgard,
         msa=rules.remove_duplicates_msa.output.rd,
     output:
-        manifest=os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "gard", "segments.json"),
-        segdir=directory(os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "gard", "segments")),
+        manifest=os.path.join(
+            str(OUTROOT_SEQUENCE), "{sequence}", "gard", "segments.json"
+        ),
+        segdir=directory(
+            os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "gard", "segments")
+        ),
         log=os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.gard.log"),
     run:
         # Logging for checkpoint: use output.log (gard.log)

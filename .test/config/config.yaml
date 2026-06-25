@@ -11,7 +11,7 @@ sequences_csv: .test/config/tiny_sequences.csv
 outdir: .test/results
 
 # If MPI should be used for GARD
-use_mpi: "True"
+use_mpi: True
 
 # External executables
 # Leave these as-is if the tools are available on PATH in the AOC environment.
