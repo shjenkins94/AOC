@@ -7,6 +7,7 @@
 
 # Core inputs / outputs
 samples_csv: config/samples.csv
+sequences_csv: config/sequences.csv
 outdir: results
 
 # If MPI should be used for GARD

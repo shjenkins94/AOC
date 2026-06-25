@@ -1,2 +1,4 @@
-sample,codon_fasta,sequence_labels_csv
-tiny,.test/resources/tiny.fasta,
+sample,sequence,sequence_labels_csv
+tiny,BDNF,
+tiny1,BDNF,.tests/resources/tiny1_sequence_labels.csv
+tiny2,BDNF,.tests/resources/tiny2_sequence_labels.csv

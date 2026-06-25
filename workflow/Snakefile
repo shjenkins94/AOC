@@ -36,7 +36,10 @@ configfile: "config/config.yaml"
 
 BASEDIR = os.getcwd()
 OUTROOT = Path(config.get("outdir", "results"))
+OUTROOT_SEQUENCE = os.path.join(OUTROOT, "by_sequence")
+
 SAMPLES_CSV = config.get("samples_csv", "samples.csv")
+SEQUENCES_CSV = config.get("sequences_csv", "sequences.csv")
 
 # Tools / scripts (override in config/config.yaml as needed)
 HYPHY = config.get("hyphy", "hyphy")
@@ -126,24 +129,27 @@ def _macse_heap_mb():
 
 
 ###############################################################################
-# Read samples.csv (must include: sample, codon_fasta, sequence_labels_csv)
+# Read samples.csv (must include: sample, sequence, sequence_labels_csv)
 ###############################################################################
 
-samples_df = pd.read_csv(SAMPLES_CSV).copy()
-required = {"sample", "codon_fasta", "sequence_labels_csv"}
+samples_df = pd.read_csv(SAMPLES_CSV, dtype=str).copy()
+required = {"sample", "sequence", "sequence_labels_csv"}
 missing = required.difference(samples_df.columns)
 if missing:
     raise ValueError(f"samples.csv missing required columns {sorted(missing)}")
 
-samples_df["sample"] = samples_df["sample"].astype(str)
+sequences_df = pd.read_csv(SEQUENCES_CSV, dtype=str).copy()
+required_seq = {"sequence", "codon_fasta"}
+missing_seq = required_seq.difference(sequences_df.columns)
+if missing_seq:
+    raise ValueError(f"sequences.csv missing required columns {sorted(missing_seq)}")
 
 SAMPLES = samples_df["sample"].tolist()
-CODON_FASTA_BY_SAMPLE = dict(
-    zip(samples_df["sample"], samples_df["codon_fasta"].astype(str))
-)
-LABELS_CSV_BY_SAMPLE = dict(
-    zip(samples_df["sample"], samples_df["sequence_labels_csv"].astype(str))
-)
+SEQUENCES = sequences_df["sequence"].tolist()
+
+CODON_FASTA_BY_SEQUENCE = dict(zip(sequences_df["sequence"], sequences_df["codon_fasta"]))
+SEQUENCE_BY_SAMPLE = dict(zip(samples_df["sample"], samples_df["sequence"]))
+LABELS_CSV_BY_SAMPLE  = dict(zip(samples_df["sample"], samples_df["sequence_labels_csv"]))
 
 
 def _is_missing(x):
@@ -155,8 +161,8 @@ def _is_missing(x):
     return (s == "") or (s.lower() == "nan")
 
 
-def codon_fasta_path(sample):
-    return os.path.join(BASEDIR, CODON_FASTA_BY_SAMPLE[sample])
+def codon_fasta_path(sequence):
+    return os.path.join(BASEDIR, CODON_FASTA_BY_SEQUENCE[sequence])
 
 
 def labels_csv_path(sample):
@@ -165,19 +171,22 @@ def labels_csv_path(sample):
         return ""
     return os.path.join(BASEDIR, str(v))
 
-
-SAMPLES_WITH_LABELS = [
-    s
-    for s in SAMPLES
-    if (not _is_missing(LABELS_CSV_BY_SAMPLE.get(s, None)))
-    and os.path.exists(labels_csv_path(s))
-]
-
 ###############################################################################
 # Path helpers
 ###############################################################################
 
+# Per sequence paths
 
+def sequence_dir(sequence):
+    return os.path.join(str(OUTROOT_SEQUENCE), sequence)
+
+def gard_dir(sequence):
+    return os.path.join(sequence_dir(sequence), "gard")
+
+def gard_segments_dir(sequence):
+    return os.path.join(gard_dir(sequence), "segments")
+
+# Per sample paths
 def sample_dir(sample):
     return os.path.join(str(OUTROOT), sample)
 
@@ -375,30 +384,30 @@ def _branch_arg(sample):
 
 rule all:
     input:
-        expand(
-            os.path.join(str(OUTROOT), "{sample}", "{sample}.RD.SA.codons.cln.fa"),
-            sample=SAMPLES,
-        ),
-        expand(
-            os.path.join(
-                str(OUTROOT),
-                "{sample}",
-                "{sample}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
-            ),
-            sample=SAMPLES,
-        ),
-        expand(
-            os.path.join(str(OUTROOT), "{sample}", "selection", "ALL_PARTITIONS.done"),
-            sample=SAMPLES,
-        ),
-        expand(
-            os.path.join(str(OUTROOT), "{sample}", "{sample}.test_sequences.txt"),
-            sample=SAMPLES_WITH_LABELS,
-        ),
-        expand(
-            os.path.join(str(OUTROOT), "{sample}", "{sample}.sequence_header_map.csv"),
-            sample=SAMPLES_WITH_LABELS,
-        ),
+        # expand(
+        #     os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.RD.SA.codons.cln.fa"),
+        #     sequence=SEQUENCES,
+        # ),
+        # expand(
+        #     os.path.join(
+        #         str(OUTROOT_SEQUENCE),
+        #         "{sequence}",
+        #         "{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
+        #     ),
+        #     sequence=SEQUENCES,
+        # ),
+        # expand(
+        #     os.path.join(str(OUTROOT), "{sample}", "selection", "ALL_PARTITIONS.done"),
+        #     sample=SAMPLES,
+        # ),
+        # expand(
+        #     os.path.join(str(OUTROOT), "{sample}", "{sample}.test_sequences.txt"),
+        #     sample=SAMPLES_WITH_LABELS,
+        # ),
+        # expand(
+        #     os.path.join(str(OUTROOT), "{sample}", "{sample}.sequence_header_map.csv"),
+        #     sample=SAMPLES_WITH_LABELS,
+        # ),
         expand(
             os.path.join(
                 str(OUTROOT),
@@ -516,12 +525,12 @@ ruleorder:
 
 rule macse:
     input:
-        fasta=lambda wc: codon_fasta_path(wc.sample),
+        fasta=lambda wc: codon_fasta_path(wc.sequence),
     output:
-        codons=os.path.join(str(OUTROOT), "{sample}", "{sample}.codons.fa"),
-        aa=os.path.join(str(OUTROOT), "{sample}", "{sample}.aa.fa"),
+        codons=os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.codons.fa"),
+        aa=os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.aa.fa"),
     log:
-        os.path.join(LOGDIR, "macse.{sample}.log"),
+        os.path.join(LOGDIR, "macse.{sequence}.log"),
     resources:
         mem_mb=_macse_requested_mem_mb(),
         xms_mb=MACSE_XMS_MB,
@@ -531,7 +540,6 @@ rule macse:
         runner=MACSE_RUNNER,
     shell:
         r"""
-        mkdir -p {OUTROOT}/{wildcards.sample}
         bash "{params.runner}" \
             --macse-bin "{params.launcher}" \
             --xms-mb {resources.xms_mb} \
@@ -552,9 +560,9 @@ rule cln:
     input:
         codons=rules.macse.output.codons,
     output:
-        cln=os.path.join(str(OUTROOT), "{sample}", "{sample}.codons.cln.fa"),
+        cln=os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.codons.cln.fa"),
     log:
-        os.path.join(LOGDIR, "cln.{sample}.log"),
+        os.path.join(LOGDIR, "cln.{sequence}.log"),
     shell:
         r"""
         {HYPHY} CLN Universal {input.codons} 'No/No' {output.cln} >{log} 2>&1
@@ -565,9 +573,9 @@ rule strike_ambigs_msa:
     input:
         cln=rules.cln.output.cln,
     output:
-        sa=os.path.join(str(OUTROOT), "{sample}", "{sample}.SA.codons.cln.fa"),
+        sa=os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.SA.codons.cln.fa"),
     log:
-        os.path.join(LOGDIR, "strike_ambigs_msa.{sample}.log"),
+        os.path.join(LOGDIR, "strike_ambigs_msa.{sequence}.log"),
     shell:
         r"""
         {HYPHY} {STRIKE_AMBIGS_BF} --alignment {input.cln} --output {output.sa} >{log} 2>&1
@@ -578,9 +586,9 @@ rule remove_duplicates_msa:
     input:
         sa=rules.strike_ambigs_msa.output.sa,
     output:
-        rd=os.path.join(str(OUTROOT), "{sample}", "{sample}.RD.SA.codons.cln.fa"),
+        rd=os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.RD.SA.codons.cln.fa"),
     log:
-        os.path.join(LOGDIR, "remove_duplicates_msa.{sample}.log"),
+        os.path.join(LOGDIR, "remove_duplicates_msa.{sequence}.log"),
     shell:
         r"""
         {HYPHY} {REMOVE_DUPS_BF} --msa {input.sa} --output {output.rd} ENV='DATA_FILE_PRINT_FORMAT=9' >{log} 2>&1
@@ -592,13 +600,13 @@ rule tn93_cluster:
         rd=rules.remove_duplicates_msa.output.rd,
     output:
         cluster_json=os.path.join(
-            str(OUTROOT), "{sample}", "{sample}.RD.SA.codons.cln.fa.cluster.json"
+            str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.RD.SA.codons.cln.fa.cluster.json"
         ),
         cluster_fasta=os.path.join(
-            str(OUTROOT), "{sample}", "{sample}.RD.SA.codons.cln.fa.cluster.fasta"
+            str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.RD.SA.codons.cln.fa.cluster.fasta"
         ),
     log:
-        os.path.join(LOGDIR, "tn93_cluster.{sample}.log"),
+        os.path.join(LOGDIR, "tn93_cluster.{sequence}.log"),
     params:
         threshold=lambda wc: config.get("tn93_threshold", 0.01),
         max_seqs=lambda wc: config.get("tn93_max_seqs", 20),
@@ -619,19 +627,19 @@ rule recombination:
         msa=rules.tn93_cluster.output.cluster_fasta,
     output:
         gard_json=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "{sample}.RD.SA.codons.cln.fa.cluster.fasta.GARD.json",
+            str(OUTROOT_SEQUENCE),
+            "{sequence}",
+            "{sequence}.RD.SA.codons.cln.fa.cluster.fasta.GARD.json",
         ),
         bestgard=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "{sample}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
+            str(OUTROOT_SEQUENCE),
+            "{sequence}",
+            "{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
         ),
     params:
         hyphy_command=lambda wildcards, resources:f"{resources.mpi} -n {resources.tasks} {HYPHYMPI}" if config.get("use_mpi", False) else HYPHY,
     log:
-        os.path.join(LOGDIR, "recombination.{sample}.log"),
+        os.path.join(LOGDIR, "recombination.{sequence}.log"),
     shell:
         r"""
         {params.hyphy_command} GARD --alignment {input.msa} --rv GDD --output {output.gard_json} --mode Faster ENV='TOLERATE_NUMERICAL_ERRORS=1;' \
@@ -668,9 +676,9 @@ checkpoint parse_gard:
         bestgard=rules.recombination.output.bestgard,
         msa=rules.remove_duplicates_msa.output.rd,
     output:
-        manifest=os.path.join(str(OUTROOT), "{sample}", "gard", "segments.json"),
-        segdir=directory(os.path.join(str(OUTROOT), "{sample}", "gard", "segments")),
-        log=os.path.join(str(OUTROOT), "{sample}", "{sample}.gard.log"),
+        manifest=os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "gard", "segments.json"),
+        segdir=directory(os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "gard", "segments")),
+        log=os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.gard.log"),
     run:
         # Logging for checkpoint: use output.log (gard.log)
         os.makedirs(os.path.dirname(output.log), exist_ok=True)
@@ -700,9 +708,9 @@ checkpoint parse_gard:
             remainder = seg_len % 3
             data_adjusted_coords.append([start, end - remainder])
             carryOver = remainder
-        os.makedirs(gard_segments_dir(wildcards.sample), exist_ok=True)
+        os.makedirs(gard_segments_dir(wildcards.sequence), exist_ok=True)
         manifest = {
-            "sample": wildcards.sample,
+            "sample": wildcards.sequence,
             "msa": str(input.msa),
             "bestgard": str(input.bestgard),
             "n_parts": len(data_adjusted_coords),
@@ -711,8 +719,8 @@ checkpoint parse_gard:
         with open(output.log, "w") as log_file:
             for i, (start, stop) in enumerate(data_adjusted_coords, start=1):
                 out_fa = os.path.join(
-                    gard_segments_dir(wildcards.sample),
-                    f"{wildcards.sample}.part{i}.codon.fas",
+                    gard_segments_dir(wildcards.sequence),
+                    f"{wildcards.sequence}.part{i}.codon.fas",
                 )
                 with open(out_fa, "w") as out_f:
                     for record in records:
@@ -746,7 +754,7 @@ checkpoint parse_gard:
 
 
 def _parts_for_sample(wc):
-    ck = checkpoints.parse_gard.get(sample=wc.sample)
+    ck = checkpoints.parse_gard.get(sequence=SEQUENCE_BY_SAMPLE[wc.sample])
     with open(ck.output.manifest) as fh:
         m = json.load(fh)
     return [str(p["part"]) for p in m["parts"]]
@@ -754,12 +762,13 @@ def _parts_for_sample(wc):
 
 # QUICKFIX: deterministic partition fasta path (no json-as-alignment bugs)
 def _partition_fasta(wc):
+    sequence = SEQUENCE_BY_SAMPLE[wc.sample]
     return os.path.join(
-        str(OUTROOT),
-        wc.sample,
+        str(OUTROOT_SEQUENCE),
+        sequence,
         "gard",
         "segments",
-        f"{wc.sample}.part{wc.part}.codon.fas",
+        f"{sequence}.part{wc.part}.codon.fas",
     )
 
 

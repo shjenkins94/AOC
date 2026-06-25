@@ -7,6 +7,7 @@
 
 # Core inputs / outputs
 samples_csv: .test/config/tiny_samples.csv
+sequences_csv: .test/config/tiny_sequences.csv
 outdir: .test/results
 
 # If MPI should be used for GARD
