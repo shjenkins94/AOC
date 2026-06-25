@@ -43,15 +43,23 @@ HYPHY = config.get("hyphy", "hyphy")
 FASTTREE = config.get("fasttree", "FastTree")
 
 REMOVE_DUPS_BF = config.get(
-    "remove_dups_bf", workflow.source_path("scripts/remove-duplicates/remove-duplicates.bf"))
+    "remove_dups_bf",
+    workflow.source_path("scripts/remove-duplicates/remove-duplicates.bf"),
+)
 
-STRIKE_AMBIGS_BF = config.get("strike_ambigs_bf", workflow.source_path("scripts/strike-ambigs.bf"))
-LABEL_TREE_BF = config.get("label_tree_bf", workflow.source_path("scripts/LabelTrees/label-tree.bf"))
+STRIKE_AMBIGS_BF = config.get(
+    "strike_ambigs_bf", workflow.source_path("scripts/strike-ambigs.bf")
+)
+LABEL_TREE_BF = config.get(
+    "label_tree_bf", workflow.source_path("scripts/LabelTrees/label-tree.bf")
+)
 
 MAKE_TEST_LIST_PY = config.get(
     "make_test_list_py", workflow.source_path("scripts/make_sequence_header_map.py")
 )
-TN93_CLUSTER_PY = config.get("tn93_cluster_py", workflow.source_path("scripts/tn93_cluster.py"))
+TN93_CLUSTER_PY = config.get(
+    "tn93_cluster_py", workflow.source_path("scripts/tn93_cluster.py")
+)
 
 # Summarizer scripts (from your Snakefile_SummarizeResults)
 # If these scripts differ in your repo, update paths in config.yaml
@@ -68,7 +76,9 @@ MACSE_HEAP_FRACTION = float(config.get("macse_heap_fraction", 0.875))
 MACSE_HEAP_RESERVE_MB = int(config.get("macse_heap_reserve_mb", 1024))
 MACSE_MIN_HEAP_MB = int(config.get("macse_min_heap_mb", 2048))
 MACSE_XMS_MB = int(config.get("macse_xms_mb", 512))
-MACSE_RUNNER = config.get("macse_runner", workflow.source_path("scripts/run_macse_with_heap.sh"))
+MACSE_RUNNER = config.get(
+    "macse_runner", workflow.source_path("scripts/run_macse_with_heap.sh")
+)
 
 
 def _coerce_int(value):
@@ -680,129 +690,8 @@ rule build_header_map_and_test_list:
         test_txt=os.path.join(str(OUTROOT), "{sample}", "{sample}.test_sequences.txt"),
     log:
         os.path.join(LOGDIR, "build_header_map_and_test_list.{sample}.log"),
-    run:
-        import os, re
-        import pandas as pd
-        from collections import Counter
-
-        os.makedirs(os.path.join(str(OUTROOT), wildcards.sample), exist_ok=True)
-        logp = log[0] if hasattr(log, "__iter__") else str(log)
-        os.makedirs(os.path.dirname(logp), exist_ok=True)
-
-        def sanitize_header(h: str) -> str:
-            """
-    Convert NCBI-ish headers into single-token HyPhy-safe IDs:
-    - Replace '.' and any non-alnum with '_'
-    - Collapse multiple underscores
-    - Strip leading/trailing underscores
-    Example:
-      'NM_001709.5 Homo sapiens brain derived...' ->
-      'NM_001709_5_Homo_sapiens_brain_derived...'
-    """
-            h = (h or "").strip().lstrip(">")
-            h = re.sub(r"[^A-Za-z0-9]+", "_", h)  # spaces, punctuation -> _
-            h = re.sub(r"_+", "_", h)  # collapse
-            h = h.strip("_")
-            return h
-
-        with open(logp, "w") as L:
-            L.write(f"[INFO] sample={wildcards.sample}\n")
-            L.write(f"[INFO] labels={input.labels}\n")
-        if (not input.labels) or (str(input.labels).strip() == ""):
-            raise ValueError(
-                f"[build_header_map_and_test_list] labels path is empty for sample={wildcards.sample}"
-            )
-        if not os.path.exists(input.labels):
-            raise FileNotFoundError(
-                f"[build_header_map_and_test_list] labels CSV not found: {input.labels}"
-            )
-        df = pd.read_csv(input.labels)
-        # normalize column names
-        df.columns = [c.strip().lower() for c in df.columns]
-        # heuristic column detection
-        label_candidates = [
-            "label",
-            "group",
-            "set",
-            "class",
-            "foreground",
-            "branchset",
-        ]
-        header_candidates = [
-            "header",
-            "sequence_header",
-            "seq_header",
-            "id",
-            "name",
-            "taxon",
-            "tip",
-            "sequence",
-        ]
-        label_col = next((c for c in label_candidates if c in df.columns), None)
-        header_col = next((c for c in header_candidates if c in df.columns), None)
-        if label_col is None or header_col is None:
-            if df.shape[1] == 2:
-                label_col = df.columns[0]
-                header_col = df.columns[1]
-            else:
-                raise ValueError(
-                    f"[build_header_map_and_test_list] Could not infer label/header columns.\n"
-                    f"Columns found: {list(df.columns)}\n"
-                    f"Expected something like LABEL + HEADER (or a 2-column CSV)."
-                )
-        labels_raw = df[label_col].astype(str).str.strip()
-        headers_raw = df[header_col].astype(str).str.strip().str.lstrip(">")
-        # sanitize -> mapped headers
-        mapped = headers_raw.map(sanitize_header)
-        # ensure uniqueness after sanitization (very important)
-        counts = Counter()
-        mapped_unique = []
-        for m in mapped.tolist():
-            counts[m] += 1
-            if counts[m] == 1:
-                mapped_unique.append(m)
-            else:
-                mapped_unique.append(f"{m}_dup{counts[m]}")
-        mapped_unique = pd.Series(mapped_unique)
-        # define what counts as Test
-        labels_norm = labels_raw.str.lower()
-        is_test = labels_norm.isin(
-            {"test", "foreground", "fg", "case"}
-        ) | labels_norm.str.contains(r"\btest\b", regex=True)
-        test_headers_mapped = mapped_unique[is_test].dropna().tolist()
-        # write map
-        map_df = pd.DataFrame(
-            {"original_header": headers_raw, "mapped_header": mapped_unique}
-        )
-        map_df.to_csv(output.map_csv, index=False)
-        # write test list (MAPPED headers, one per line)
-        with open(output.test_txt, "w") as out:
-            out.write(
-                "\n".join(test_headers_mapped)
-                + ("\n" if test_headers_mapped else "")
-            )
-        with open(logp, "a") as L:
-            L.write(f"[INFO] label_col={label_col}, header_col={header_col}\n")
-            L.write(f"[INFO] total_rows={len(df)}\n")
-            L.write(f"[INFO] test_rows={len(test_headers_mapped)}\n")
-            L.write("[INFO] first_mappings:\n")
-            for i in range(min(5, len(map_df))):
-                L.write(
-                    f"  - {map_df.iloc[i]['original_header']} -> {map_df.iloc[i]['mapped_header']}\n"
-                )
-        # strict checks
-        if os.path.getsize(output.map_csv) == 0:
-            raise RuntimeError(
-                f"[build_header_map_and_test_list] map_csv empty: {output.map_csv}"
-            )
-        if (
-            config.get("require_test_sequences", False)
-            and len(test_headers_mapped) == 0
-        ):
-            raise RuntimeError(
-                f"[build_header_map_and_test_list] No Test sequences found for sample={wildcards.sample} "
-                f"but require_test_sequences=True. See log: {logp}"
-            )
+    script:
+        "scripts/build_header_map_and_test_list.py"
 
 
 ###############################################################################
