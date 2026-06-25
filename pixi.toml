@@ -1,0 +1,31 @@
+[workspace]
+authors = ["Scott H. Jenkins <shjenkins94@gmail.com>"]
+channels = ["conda-forge", "bioconda"]
+name = "AOC"
+platforms = ["linux-64"]
+version = "0.1.0"
+
+[tasks]
+
+[dependencies]
+python = "3.11.*"
+pip = "*"
+snakemake = "7.32.4.*"
+hyphy = "2.5.74.*"
+pyyaml = "*"
+rich = "*"
+tn93 = "1.0.15.*"
+biopython = "1.83.*"
+ete3 = "3.1.2.*"
+macse = "*"
+openjdk = "*"
+fasttree = "2.2.0.*"
+numpy = "*"
+pandas = "*"
+matplotlib = "*"
+statsmodels = "0.14.6.*"
+altair = "5.2.0.*"
+altair_saver = "0.5.0.*"
+vl-convert-python = "1.9.0.*"
+pytest = "*"
+snakefmt = ">=2.0.2,<3"
