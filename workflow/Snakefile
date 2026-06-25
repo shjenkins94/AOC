@@ -344,20 +344,10 @@ ruleorder:
     BUSTEDS_MH_all_partitions >
     RELAX_all_partitions >
     run_selection_all_partitions >
-    PlotFEL_partition >
-    PlotMEME_partition >
     TableABSREL_partition >
-    TableBUSTEDS_MH_partition >
-    TableRELAX_partition >
     TableCFEL_partition >
-    MergeFELCSVs >
-    MergeMEMECSVs >
     MergeABSRELCSVs >
-    MergeBUSTEDS_MH_CSVs >
-    MergeRELAXCSVs >
     MergeCFELCSVs >
-    PlotFELMerge >
-    PlotMEMEMerge >
     SelectionOverviewTable >
     executive_summary
 
@@ -459,8 +449,8 @@ rule recombination:
         gard_json=os.path.join(str(OUTROOT), "{sequence}", "{sequence}.RD.SA.codons.cln.fa.cluster.fasta.GARD.json"),
         bestgard=os.path.join(str(OUTROOT), "{sequence}", "{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard"),
     resources:
-        tasks: workflow.cores * 0.5,
-        mpi = "mpirun",
+        tasks=10,
+        mpi ="mpirun",
     log:
         os.path.join(LOGDIR, "recombination.{sequence}.log")
     shell:
@@ -1542,10 +1532,10 @@ rule SelectionOverviewTable_all_partitions:
 
 rule executive_summary:
     input:
-        fel=rules.MergeFELCSVs.output.merged_csv,
-        meme=rules.MergeMEMECSVs.output.merged_csv,
-        fel_plot=rules.PlotFELMerge.output.output_png,
-        meme_plot=rules.PlotMEMEMerge.output.output_png,
+        fel=rules.PlotFEL_all_partitions.output.output_csv,
+        meme=rules.PlotMEME_all_partitions.output.output_csv,
+        fel_plot=rules.PlotFEL_all_partitions.output.output_png,
+        meme_plot=rules.PlotMEME_all_partitions.output.output_png,
         overview=rules.SelectionOverviewTable.output.csv
     output:
         html=os.path.join(str(OUTROOT), "{sample}", "summary", "executive_summary.html")
@@ -1575,8 +1565,8 @@ rule executive_summary:
                 <h2>Selection overview</h2>
                 {overview_html}
                 <h2>Plots</h2>
-                <p><img src="../visualizations/{wildcards.sample}.FEL.merged.png" width="1200"></p>
-                <p><img src="../visualizations/{wildcards.sample}.MEME.merged.png" width="1200"></p>
+                <p><img src="../visualizations/{wildcards.sample}.all_partitions.FEL.png" width="1200"></p>
+                <p><img src="../visualizations/{wildcards.sample}.all_partitions.MEME.png" width="1200"></p>
                 </body></html>""")
 
 ###############################################################################
