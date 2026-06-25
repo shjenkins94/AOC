@@ -11,7 +11,6 @@ logs/**
 .snakemake
 .snakemake/**
 .test/results/*
-tests/tmp_output/**
 workflow/notebooks/.ipynb_checkpoints/**
 **/.Rhistory
 **/*.Rproj
