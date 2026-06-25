@@ -9,13 +9,13 @@ set -euo pipefail
 # - Bootstraps hyphy-analyses repo if missing
 #
 # Usage:
-#   bash ./install.sh AOC envs/AOC.yaml
+#   bash ./install.sh AOC workflow/envs/AOC.yaml
 #   FRONTEND_OVERRIDE=conda bash ./install.sh AOC envs/AOC.yaml
 #   FRONTEND_OVERRIDE=micromamba bash ./install.sh AOC envs/AOC.yaml
 # -----------------------------------------------------------------------------
 
 ENV_NAME="${1:-AOC}"
-ENV_FILE="${2:-envs/AOC.yaml}"
+ENV_FILE="${2:-workflow/envs/AOC.yaml}"
 
 echo "[install] env_name=${ENV_NAME}"
 echo "[install] env_file=${ENV_FILE}"
