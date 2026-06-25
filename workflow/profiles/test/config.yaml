@@ -7,5 +7,5 @@ default-resources:
 set-resources:
   # use_mpi must be set to True for these to take effect
   recombination:
-    tasks: 16
+    tasks: 20
     mpi: "mpirun"
