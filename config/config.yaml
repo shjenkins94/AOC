@@ -6,8 +6,8 @@
 # - optional MACSE memory settings on large alignments
 
 # Core inputs / outputs
-samples_csv: config/samples.csv
-sequences_csv: config/sequences.csv
+samples_csv: config/bat_samples.csv
+sequences_csv: config/bat_sequences.csv
 outdir: results
 
 # If MPI should be used for GARD
