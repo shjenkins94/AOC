@@ -9,8 +9,6 @@ import os, re
 import pandas as pd
 from collections import Counter
 
-import snakemake
-
 def sanitize_header(h: str) -> str:
     """Convert NCBI-ish headers into single-token HyPhy-safe IDs:
     - Replace '.' and any non-alnum with '_'
@@ -110,9 +108,9 @@ with open(snakemake.log[0], "w") as L:
 
 
     # strict checks
-    if os.path.getsize(output.map_csv) == 0:
+    if os.path.getsize(snakemake.output["map_csv"]) == 0:
         raise RuntimeError(
-            f"[build_header_map_and_test_list] map_csv empty: {output.map_csv}"
+            f"[build_header_map_and_test_list] map_csv empty: {snakemake.output['map_csv']}"
         )
     if (
         snakemake.config.get("require_test_sequences", False)
