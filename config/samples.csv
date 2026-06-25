@@ -1,2 +1,2 @@
 sample,codon_fasta,sequence_labels_csv
-BDNF-64,data/BDNF/BDNF-64.fasta,data/BDNF/BDNF-64.sequence_labels.csv
+BDNF-64,resources/BDNF/BDNF-64.fasta,resources/BDNF/BDNF-64.sequence_labels.csv
