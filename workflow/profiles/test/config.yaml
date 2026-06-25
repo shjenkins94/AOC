@@ -1,0 +1,2 @@
+configfile: .test/config/config.yaml
+cores: 4

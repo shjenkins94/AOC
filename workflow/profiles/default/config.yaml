@@ -1,0 +1,7 @@
+cores: "all"
+jobs: 4
+latency-wait: 60
+keep-going: True
+reason: True
+rerun-incomplete: True
+rerun-triggers: mtime

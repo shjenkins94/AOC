@@ -6,8 +6,8 @@
 # - optional MACSE memory settings on large alignments
 
 # Core inputs / outputs
-samples_csv: config/samples.csv
-outdir: results
+samples_csv: .test/config/tiny_samples.csv
+outdir: .test/results
 
 # External executables
 # Leave these as-is if the tools are available on PATH in the AOC environment.

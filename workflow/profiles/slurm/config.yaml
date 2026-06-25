@@ -1,0 +1,41 @@
+slurm: True
+jobs: 100
+latency-wait: 60
+keep-going: True
+reason: True
+rerun-incomplete: True
+printshellcmds: True
+rerun-triggers: mtime
+default-resources:
+  runtime: 10
+  mem_mb_per_cpu: 2000
+  max_jobs_per_timespan: .1
+  partition: epyc,rome,medium
+set-resources:
+  macse:
+    mem_mb_per_cpu: 8000
+    runtime: 1d
+  recombination:
+    mpi: "srun"
+    nodes: 1
+    tasks: 32
+    runtime: 1d
+  CFEL_partition:
+    threads: 16
+    runtime: 1h
+  ABSREL_partition:
+    threads: 32
+    runtime: 4h
+  FEL_all_partitions:
+    threads: 16
+    runtime: 1h
+  MEME_all_partitions:
+    threads: 16
+    runtime: 2h
+  BUSTEDS_MH_all_partitions:
+    threads: 8
+    runtime: 40
+  RELAX_all_partitions:
+    threads: 16
+    runtime: 1h
+  
