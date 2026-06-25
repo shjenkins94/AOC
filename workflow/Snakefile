@@ -330,7 +330,7 @@ rule all:
         # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_BUSTEDS-MH_Results.csv"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_RELAX_Results.csv"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_CFEL_Results.csv"), sample=SAMPLES),
-        expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.selection_overview_all_partitions.csv"), sample=SAMPLES),
+        # expand(os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.selection_overview_all_partitions.csv"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "visualizations", "{sample}.FEL.merged.png"), sample=SAMPLES),
         # expand(os.path.join(str(OUTROOT), "{sample}", "visualizations", "{sample}.MEME.merged.png"), sample=SAMPLES)
 
@@ -475,12 +475,14 @@ rule recombination:
     output:
         gard_json=os.path.join(str(OUTROOT), "{sequence}", "{sequence}.RD.SA.codons.cln.fa.cluster.fasta.GARD.json"),
         bestgard=os.path.join(str(OUTROOT), "{sequence}", "{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard"),
-    threads: workflow.cores * 0.5
+    resources:
+        tasks: workflow.cores * 0.5,
+        mpi = "mpirun",
     log:
         os.path.join(LOGDIR, "recombination.{sequence}.log")
     shell:
         r"""
-        mpirun -np {threads} HYPHYMPI .pixi/envs/default/share/hyphy/TemplateBatchFiles/GARD.bf --alignment {input.msa} --rv GDD --output {output.gard_json} --mode Faster ENV='TOLERATE_NUMERICAL_ERRORS=1;' \
+        {resources.mpi} -np {resources.tasks} HYPHYMPI gard --alignment {input.msa} --rv GDD --output {output.gard_json} --mode Faster ENV='TOLERATE_NUMERICAL_ERRORS=1;' \
           > {log} 2>&1
         """
 
@@ -726,6 +728,7 @@ rule FEL_all_partitions:
         os.path.join(LOGDIR, "FEL_partition.{sample}.all_partitions.log")
     shell:
         r"""
+        export HYPHY_NUM_CORES={threads}
         {HYPHY} FEL --alignment {input.aln} --output {output.json} --ci Yes {params.branch_arg} > {log} 2>&1
         """
 
@@ -740,6 +743,7 @@ rule MEME_all_partitions:
         os.path.join(LOGDIR, "MEME_partition.{sample}.all_partitions.log")
     shell:
         r"""
+        export HYPHY_NUM_CORES={threads}
         {HYPHY} MEME --alignment {input.aln} --output {output.json} {params.branch_arg} ENV='TOLERATE_NUMERICAL_ERRORS=1;' > {log} 2>&1
         """
 
@@ -754,6 +758,7 @@ rule BUSTEDS_MH_all_partitions:
         os.path.join(LOGDIR, "BUSTEDS_MH_partition.{sample}.all_partitions.log")
     shell:
         r"""
+        export HYPHY_NUM_CORES={threads}
         {HYPHY} BUSTED \
           --alignment {input.aln} \
           --output {output.json} \
@@ -782,6 +787,7 @@ rule RELAX_all_partitions:
             with open(logp, "a") as L:
                 L.write("Skipped (no test list)\nEND\n")
         else:
+            shell("export HYPHY_NUM_CORES={threads}")
             shell(
                 f"{HYPHY} RELAX --alignment {input.aln} "
                 f"--output {output.json} --test TEST "
