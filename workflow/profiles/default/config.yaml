@@ -4,4 +4,11 @@ latency-wait: 60
 keep-going: True
 reason: True
 rerun-incomplete: True
+printshellcmds: True
 rerun-triggers: mtime
+default-resources:
+set-resources:
+  # use_mpi must be set to True for these to take effect
+  recombination:
+    tasks: 10
+    mpi: "mpirun"

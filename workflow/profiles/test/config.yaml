@@ -1,2 +1,11 @@
 configfile: .test/config/config.yaml
+printshellcmds: True
+reason: True
 cores: 4
+rerun-triggers: mtime
+default-resources:
+set-resources:
+  # use_mpi must be set to True for these to take effect
+  recombination:
+    tasks: 16
+    mpi: "mpirun"

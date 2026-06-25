@@ -40,6 +40,7 @@ SAMPLES_CSV = config.get("samples_csv", "samples.csv")
 
 # Tools / scripts (override in config/config.yaml as needed)
 HYPHY = config.get("hyphy", "hyphy")
+HYPHYMPI = config.get("hyphympi", "HYPHYMPI")
 FASTTREE = config.get("fasttree", "FastTree")
 
 REMOVE_DUPS_BF = config.get(
@@ -79,7 +80,6 @@ MACSE_XMS_MB = int(config.get("macse_xms_mb", 512))
 MACSE_RUNNER = config.get(
     "macse_runner", workflow.source_path("scripts/run_macse_with_heap.sh")
 )
-
 
 def _coerce_int(value):
     try:
@@ -562,18 +562,18 @@ rule macse:
         os.path.join(LOGDIR, "macse.{sample}.log"),
     resources:
         mem_mb=_macse_requested_mem_mb(),
+        xms_mb=MACSE_XMS_MB,
+        xmx_mb=_macse_heap_mb(),
     params:
         launcher=MACSE_LAUNCHER,
         runner=MACSE_RUNNER,
-        xms_mb=MACSE_XMS_MB,
-        xmx_mb=_macse_heap_mb(),
     shell:
         r"""
         mkdir -p {OUTROOT}/{wildcards.sample}
         bash "{params.runner}" \
             --macse-bin "{params.launcher}" \
-            --xms-mb {params.xms_mb} \
-            --xmx-mb {params.xmx_mb} \
+            --xms-mb {resources.xms_mb} \
+            --xmx-mb {resources.xmx_mb} \
             -- \
             -prog alignSequences \
             -seq "{input.fasta}" \
@@ -666,11 +666,13 @@ rule recombination:
             "{sample}",
             "{sample}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
         ),
+    params:
+        hyphy_command=lambda wildcards, resources:f"{resources.mpi} -n {resources.tasks} {HYPHYMPI}" if config.get("use_mpi", False) else HYPHY,
     log:
         os.path.join(LOGDIR, "recombination.{sample}.log"),
     shell:
         r"""
-        {HYPHY} GARD --alignment {input.msa} --rv GDD --output {output.gard_json} --mode Faster ENV='TOLERATE_NUMERICAL_ERRORS=1;' \
+        {params.hyphy_command} GARD --alignment {input.msa} --rv GDD --output {output.gard_json} --mode Faster ENV='TOLERATE_NUMERICAL_ERRORS=1;' \
             >{log} 2>&1
         """
 
