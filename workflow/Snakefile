@@ -190,30 +190,6 @@ def empty_test_list_file(sample):
     return os.path.join(sample_dir(sample), f"{sample}.test_sequences.EMPTY.txt")
 
 
-def header_map_file(sample):
-    return os.path.join(sample_dir(sample), f"{sample}.sequence_header_map.csv")
-
-
-def gard_dir(sample):
-    return os.path.join(sample_dir(sample), "gard")
-
-
-def gard_segments_dir(sample):
-    return os.path.join(gard_dir(sample), "segments")
-
-
-def gard_manifest(sample):
-    return os.path.join(gard_dir(sample), "segments.json")
-
-
-def gard_log(sample):
-    return os.path.join(sample_dir(sample), f"{sample}.gard.log")
-
-
-def codon1_file(sample):
-    return os.path.join(sample_dir(sample), f"{sample}.1.codon.fas")
-
-
 def selection_dir(sample):
     return os.path.join(sample_dir(sample), "selection")
 
@@ -222,22 +198,8 @@ def selection_part_dir(sample, part):
     return os.path.join(selection_dir(sample), f"part{part}")
 
 
-def log_path(rule_name, sample, part=None):
-    if part is None:
-        return os.path.join(LOGDIR, f"{rule_name}.{sample}.log")
-    return os.path.join(LOGDIR, f"{rule_name}.{sample}.part{part}.log")
-
-
-def tables_dir(sample):
-    return os.path.join(sample_dir(sample), "tables")
-
-
 def viz_dir(sample):
     return os.path.join(sample_dir(sample), "visualizations")
-
-
-def summary_dir(sample):
-    return os.path.join(sample_dir(sample), "summary")
 
 
 def fel_table(sample, part):
