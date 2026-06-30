@@ -1,0 +1,7 @@
+program,run,direct_gard,requires_labels,plot
+ABSREL,True,False,False,False
+BUSTEDS-MH,True,True,False,False
+CFEL,True,False,True,False
+FEL,True,True,False,True
+MEME,True,True,False,True
+RELAX,True,True,True,False

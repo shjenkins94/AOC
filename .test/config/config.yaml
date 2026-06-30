@@ -13,6 +13,9 @@ outdir: .test/results
 # If MPI should be used for GARD
 use_mpi: True
 
+# This can be used to add or remove HYPHY tests, but adding new tests is not recommended unless you are familiar with HYPHY and the AOC workflow.
+tests_csv: .test/config/tiny_tests.csv
+
 # External executables
 # Leave these as-is if the tools are available on PATH in the AOC environment.
 # hyphy: hyphy

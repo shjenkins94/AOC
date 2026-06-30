@@ -19,6 +19,7 @@ import glob
 from pathlib import Path
 import pandas as pd
 import altair as alt
+from collections import defaultdict
 from statsmodels.stats.multitest import fdrcorrection
 from Bio import SeqIO
 from scripts.busteds_mh import count_busteds_mh_branches
@@ -40,6 +41,7 @@ OUTROOT_SEQUENCE = os.path.join(OUTROOT, "by_sequence")
 
 SAMPLES_CSV = config.get("samples_csv", "samples.csv")
 SEQUENCES_CSV = config.get("sequences_csv", "sequences.csv")
+TESTS_CSV = config.get("tests_csv", "tests.csv")
 
 # Tools / scripts (override in config/config.yaml as needed)
 HYPHY = config.get("hyphy", "hyphy")
@@ -171,7 +173,11 @@ def _is_missing(x):
 
 LABELS_CSV_BY_SAMPLE = {k: v for k, v in LABELS_CSV_BY_SAMPLE.items() if not _is_missing(v)}
 
-
+tests_df = pd.read_csv(TESTS_CSV, dtype=defaultdict(lambda: bool, program="str")).copy()
+required_tests = {"program", "run", "direct_gard", "requires_labels", "plot"}
+missing_tests = required_tests.difference(tests_df.columns)
+if missing_tests:
+    raise ValueError(f"tests.csv missing required columns {sorted(missing_tests)}")
 
 
 def codon_fasta_path(sequence):
@@ -478,12 +484,12 @@ rule all:
         #     ),
         #     sample=SAMPLES,
         # ),
-        # expand(
-        #     os.path.join(
-        #         str(OUTROOT), "{sample}", "tables", "{sample}.selection_overview.csv"
-        #     ),
-        #     sample=SAMPLES,
-        # ),
+        expand(
+            os.path.join(
+                str(OUTROOT), "{sample}", "tables", "{sample}.selection_overview_all_partitions.csv"
+            ),
+            sample=SAMPLES,
+        ),
         # expand(
         #     os.path.join(
         #         str(OUTROOT), "{sample}", "visualizations", "{sample}.FEL.merged.png"
@@ -714,6 +720,9 @@ checkpoint parse_gard:
         segdir=directory(
             os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "gard", "segments")
         ),
+        ids=os.path.join(
+            str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.ids.txt"
+        ),
         log=os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.gard.log"),
     run:
         # Logging for checkpoint: use output.log (gard.log)
@@ -786,6 +795,46 @@ checkpoint parse_gard:
 # Dynamic fan-out utilities (for partitions)
 ###############################################################################
 
+# Desired behavior:
+# how to get this to only run after test lists are made?
+# if labels weren't provided, then skip RELAX and CFEL
+# if the test list was empty or if there are no test sequences in the alignment, then skip everything.
+def _aggregate_test_results(wc):
+    # By default, run all tests with run=True in tests.csv
+    tests_to_run = tests_df[tests_df["run"]]
+    # First check if sample has labels CSV
+    if (LABELS_CSV_BY_SAMPLE.get(wc.sample, False)):
+        # get alignment and test IDs
+        ck = checkpoints.parse_gard.get(sequence=SEQUENCE_BY_SAMPLE[wc.sample])
+        with open(ck.output.ids) as fh:            
+            alignment_ids = [line.strip() for line in fh]
+        with open(test_list_file(wc.sample)) as fh:
+            test_ids = [line.strip() for line in fh]
+        if not any(sid in alignment_ids for sid in test_ids):
+        # Don't run any tests if there are no test sequences in the alignment
+            return []
+    else:
+        # If no labels CSV, skip tests that require labels (RELAX, CFEL)
+        tests_to_run = tests_to_run[~tests_to_run["requires_labels"]]
+    # Now to format different types of tests based on direct_gard
+    # programs that take direct GARD
+    direct_gard = expand(
+        os.path.join(
+            str(OUTROOT), "{sample}", "tables", "{sample}.AOC.{program}_Results.csv"
+        ),
+        sample=wc.sample,
+        program=tests_to_run[(tests_to_run["direct_gard"])]["program"]
+    )
+    # programs that don't take direct GARD and need to be run on each partition
+    partitioned = expand(
+        os.path.join(
+            str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_{program}_Results.csv"
+        ),
+        sample=wc.sample,
+        program=tests_to_run[(~tests_to_run["direct_gard"])]["program"]
+    )
+
+    return direct_gard + partitioned
 
 def _parts_for_sample(wc):
     ck = checkpoints.parse_gard.get(sequence=SEQUENCE_BY_SAMPLE[wc.sample])
@@ -1107,6 +1156,15 @@ def _overview_inputs_for_sample(wc):
             )
     return outs
 
+def _overview_inputs_for_sample_all_partitions(wc):
+    outs = expand(
+        os.path.join(
+            str(OUTROOT), "{sample}", "tables", "{sample}.AOC.{test}_Results.csv"
+        ),
+        sample=wc.sample,
+        test=["FEL", "MEME", "BUSTEDS-MH", "RELAX"],
+    )
+    return outs
 
 rule PlotFEL:
     input:
@@ -1712,10 +1770,7 @@ rule MergeCFELCSVs:
 # add cfel and absrel
 rule SelectionOverviewTable_all_partitions:
     input:
-        fel=os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.FEL_Results.csv"),
-        meme=os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.AOC.MEME_Results.csv"),
-        busted=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.BUSTEDS-MH.json"),
-        relax=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.RELAX.json")
+        _overview_inputs_for_sample_all_partitions,
     output:
         csv=os.path.join(str(OUTROOT), "{sample}", "tables", "{sample}.selection_overview_all_partitions.csv")
     log:
@@ -1816,7 +1871,7 @@ rule SelectionOverviewTable_all_partitions:
         os.makedirs(os.path.dirname(output.csv), exist_ok=True)
         out.to_csv(output.csv, index=False)
 
-
+# remove
 rule SelectionOverviewTable:
     input:
         _overview_inputs_for_sample,
