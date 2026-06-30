@@ -654,6 +654,7 @@ rule tn93_cluster:
             >{log} 2>&1
         """
 
+
 def _get_msa(wc):
     if KEEP_ALL_SEQUENCES:
         return rules.strike_ambigs_msa.output.sa
