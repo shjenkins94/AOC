@@ -1,2 +1,3 @@
-configfile: .test/config/config.yaml
+directory: .test
 cores: 4
+rerun-triggers: mtime

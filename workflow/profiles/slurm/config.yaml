@@ -13,8 +13,8 @@ default-resources:
   partition: epyc,rome,medium
 set-resources:
   macse:
-    mem_mb_per_cpu: 8000
-    runtime: 1d
+    threads: 4
+    runtime: 1h
   recombination:
     mpi: "srun"
     nodes: 1
@@ -34,7 +34,7 @@ set-resources:
     runtime: 2h
   BUSTEDS_MH_all_partitions:
     threads: 8
-    runtime: 40
+    runtime: 6h
   RELAX_all_partitions:
     threads: 16
     runtime: 1h
