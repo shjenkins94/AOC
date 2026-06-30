@@ -7,8 +7,7 @@
 # - tn93_max_seqs depending on how many sequences you want to retain (WARNING: default will only keep 20 sequences)
 
 # Core inputs / outputs
-samples_csv: .test/config/tiny_samples.csv
-outdir: .test/results
+samples_csv: config/tiny_samples.csv
 
 # Keep all sequences (skip remove duplicates and TN93 clustering steps)
 # Currently this is the only way to ensure that all test sequences are retained, 
