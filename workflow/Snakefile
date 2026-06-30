@@ -81,6 +81,7 @@ MACSE_RUNNER = config.get(
     "macse_runner", workflow.source_path("scripts/run_macse_with_heap.sh")
 )
 
+
 def _coerce_int(value):
     try:
         return int(str(value).strip())
@@ -666,10 +667,14 @@ rule recombination:
             "{sample}",
             "{sample}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
         ),
-    params:
-        hyphy_command=lambda wildcards, resources:f"{resources.mpi} -n {resources.tasks} {HYPHYMPI}" if config.get("use_mpi", False) else HYPHY,
     log:
         os.path.join(LOGDIR, "recombination.{sample}.log"),
+    params:
+        hyphy_command=lambda wildcards, resources: (
+            f"{resources.mpi} -n {resources.tasks} {HYPHYMPI}"
+            if config.get("use_mpi", False)
+            else HYPHY
+        ),
     shell:
         r"""
         {params.hyphy_command} GARD --alignment {input.msa} --rv GDD --output {output.gard_json} --mode Faster ENV='TOLERATE_NUMERICAL_ERRORS=1;' \
