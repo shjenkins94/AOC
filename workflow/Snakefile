@@ -117,6 +117,7 @@ def _macse_heap_mb():
     )
     return max(baseline, min(requested, usable))
 
+
 def _is_missing(x):
     if x is None:
         return True
@@ -124,6 +125,7 @@ def _is_missing(x):
         return True
     s = str(x).strip()
     return (s == "") or (s.lower() == "nan")
+
 
 ###############################################################################
 # Read samples.csv (must include: sample, codon_fasta, sequence_labels_csv)
@@ -149,6 +151,7 @@ LABELS_CSV_BY_SAMPLE = dict(
 LABELS_CSV_BY_SAMPLE = {
     k: v for k, v in LABELS_CSV_BY_SAMPLE.items() if not _is_missing(v)
 }
+
 
 SAMPLES_WITH_LABELS = [
     s for s in SAMPLES if not _is_missing(LABELS_CSV_BY_SAMPLE.get(s, None))
@@ -319,7 +322,7 @@ rule macse:
     input:
         fasta=lambda wildcards: CODON_FASTA_BY_SAMPLE[wildcards.sample],
     output:
-        codons= "results/{sample}/{sample}.codons.fa",
+        codons="results/{sample}/{sample}.codons.fa",
         aa="results/{sample}/{sample}.aa.fa",
     log:
         "logs/macse.{sample}.log",
@@ -500,7 +503,9 @@ checkpoint parse_gard:
         }
         with open(output.log, "w") as log_file:
             for i, (start, stop) in enumerate(data_adjusted_coords, start=1):
-                out_fa = params.segments_dir / f"{wildcards.sample}.part{i}.codon.fas"
+                out_fa = (
+                    params.segments_dir / f"{wildcards.sample}.part{i}.codon.fas"
+                )
                 with open(out_fa, "w") as out_f:
                     for record in records:
                         partition = record[int(start) : int(stop)]
@@ -543,7 +548,7 @@ rule fasttree_partition:
     input:
         aln="results/{sample}/gard/segments/{sample}.part{part}.codon.fas",
     output:
-        tree="results/{sample}/selection/part{part}/FastTree.treefile"
+        tree="results/{sample}/selection/part{part}/FastTree.treefile",
     log:
         "logs/fasttree_partition.{sample}.part{part}.log",
     shell:
@@ -733,7 +738,8 @@ rule CFEL_partition:
 
 rule run_selection_all_partitions:
     input:
-        lambda wildcards: expand("results/{{sample}}/selection/part{part}/{test}.json",
+        lambda wildcards: expand(
+            "results/{{sample}}/selection/part{part}/{test}.json",
             part=_parts_for_sample(wildcards),
             test=["FEL", "MEME", "ABSREL", "BUSTEDS-MH", "RELAX", "CFEL"],
         ),
@@ -761,9 +767,6 @@ rule run_selection_all_partitions:
 ###############################################################################
 
 
-
-
-
 rule PlotFEL_partition:
     input:
         json="results/{sample}/selection/part{part}/FEL.json",
@@ -785,7 +788,10 @@ rule PlotFEL_partition:
         )
         df.to_csv(output.output_csv, index=False)
         source = (
-            df.copy().dropna().rename(columns={
+            df.copy()
+            .dropna()
+            .rename(
+                columns={
                     "p-value": "p_value",
                     "adjusted_p-value": "adjusted_p_value",
                 }
@@ -933,8 +939,8 @@ rule TableABSREL_partition:
                     "omega_max": None,
                     "significant_branch_0.10": None,
                     "status": "skipped",
-                    }
-                    )
+                }
+            )
         else:
             branch_attrs = data.get("branch attributes", {}).get("0", {})
             for branch, vals in branch_attrs.items():
@@ -955,7 +961,13 @@ rule TableABSREL_partition:
                     ):
                         omega_vals.append(v)
                 omega_max = max(omega_vals) if omega_vals else None
-                n_rate_classes = len([k for k in vals.keys() if isinstance(k, str) and k.startswith("omega")])
+                n_rate_classes = len(
+                    [
+                        k
+                        for k in vals.keys()
+                        if isinstance(k, str) and k.startswith("omega")
+                    ]
+                )
                 rows.append(
                     {
                         "Sample": wildcards.sample,
@@ -965,10 +977,12 @@ rule TableABSREL_partition:
                         "Raw P-value": rp,
                         "Rate classes": n_rate_classes,
                         "omega_max": omega_max,
-                        "significant_branch_0.10": (int(cp_num <= 0.10) if cp_num is not None else 0),
+                        "significant_branch_0.10": (
+                            int(cp_num <= 0.10) if cp_num is not None else 0
+                        ),
                         "status": "ok",
-                        }
-                        )
+                    }
+                )
         df = pd.DataFrame(rows)
         df.to_csv(output.csv, index=False)
 
@@ -994,8 +1008,8 @@ rule TableBUSTEDS_MH_partition:
                     "tested_branches": None,
                     "background_branches": None,
                     "status": "skipped",
-                    }
-                    )
+                }
+            )
         else:
             # -------------------------------
             # test results
@@ -1018,8 +1032,8 @@ rule TableBUSTEDS_MH_partition:
                     "tested_branches": tested_branches,
                     "background_branches": background_branches,
                     "status": "ok",
-                    }
-                    )
+                }
+            )
         df = pd.DataFrame(rows)
         df.to_csv(output.csv, index=False)
 
@@ -1044,8 +1058,8 @@ rule TableRELAX_partition:
                     "LRT": None,
                     "selection_shift": None,
                     "status": "skipped",
-                    }
-                    ]
+                }
+            ]
         else:
             tr = data.get("test results", {})
             k = tr.get("relaxation or intensification parameter", None)
@@ -1071,8 +1085,8 @@ rule TableRELAX_partition:
                     "LRT": tr.get("LRT", None),
                     "selection_shift": shift,
                     "status": "ok",
-                    }
-                    ]
+                }
+            ]
         df = pd.DataFrame(rows)
         df.to_csv(output.csv, index=False)
 
@@ -1094,9 +1108,9 @@ rule TableCFEL_partition:
                         "Partition": int(wildcards.part),
                         "CodonSite": None,
                         "status": "skipped",
-                        }
-                        ]
-                        )
+                    }
+                ]
+            )
         else:
             headers = _hyphy_headers(data)
             df = pd.DataFrame(_hyphy_content_table(data), columns=headers)
@@ -1110,7 +1124,7 @@ rule TableCFEL_partition:
                     c
                     for c in df.columns
                     if isinstance(c, str) and "p-value" in c.lower()
-                    ),
+                ),
                 None,
             )
             if pcol is not None:
@@ -1125,7 +1139,8 @@ rule TableCFEL_partition:
 rule MergeFELCSVs:
     input:
         all_done="results/{sample}/selection/ALL_PARTITIONS.done",
-        fel_csvs=lambda wildcards: expand("results/{{sample}}/tables/part{part}/{{sample}}.part{part}.AOC.FEL_Results.csv",
+        fel_csvs=lambda wildcards: expand(
+            "results/{{sample}}/tables/part{part}/{{sample}}.part{part}.AOC.FEL_Results.csv",
             part=_parts_for_sample(wildcards),
         ),
     output:
@@ -1150,11 +1165,11 @@ rule MergeFELCSVs:
         merged_df.to_csv(output.merged_csv, index=False)
 
 
-
 rule MergeMEMECSVs:
     input:
         all_done="results/{sample}/selection/ALL_PARTITIONS.done",
-        meme_csvs=lambda wildcards: expand("results/{{sample}}/tables/part{part}/{{sample}}.part{part}.AOC.MEME_Results.csv",
+        meme_csvs=lambda wildcards: expand(
+            "results/{{sample}}/tables/part{part}/{{sample}}.part{part}.AOC.MEME_Results.csv",
             part=_parts_for_sample(wildcards),
         ),
     output:
@@ -1182,7 +1197,8 @@ rule MergeMEMECSVs:
 rule MergeABSRELCSVs:
     input:
         all_done="results/{sample}/selection/ALL_PARTITIONS.done",
-        csvs=lambda wildcards: expand("results/{{sample}}/tables/part{part}/{{sample}}.part{part}.AOC.ABSREL_Results.csv",
+        csvs=lambda wildcards: expand(
+            "results/{{sample}}/tables/part{part}/{{sample}}.part{part}.AOC.ABSREL_Results.csv",
             part=_parts_for_sample(wildcards),
         ),
     output:
@@ -1198,7 +1214,8 @@ rule MergeABSRELCSVs:
 rule MergeBUSTEDS_MH_CSVs:
     input:
         all_done="results/{sample}/selection/ALL_PARTITIONS.done",
-        csvs=lambda wildcards: expand("results/{{sample}}/tables/part{part}/{{sample}}.part{part}.AOC.BUSTEDS-MH_Results.csv",
+        csvs=lambda wildcards: expand(
+            "results/{{sample}}/tables/part{part}/{{sample}}.part{part}.AOC.BUSTEDS-MH_Results.csv",
             part=_parts_for_sample(wildcards),
         ),
     output:
@@ -1214,11 +1231,12 @@ rule MergeBUSTEDS_MH_CSVs:
 rule MergeRELAXCSVs:
     input:
         all_done="results/{sample}/selection/ALL_PARTITIONS.done",
-        csvs=lambda wildcards: expand("results/{{sample}}/tables/part{part}/{{sample}}.part{part}.AOC.RELAX_Results.csv",
+        csvs=lambda wildcards: expand(
+            "results/{{sample}}/tables/part{part}/{{sample}}.part{part}.AOC.RELAX_Results.csv",
             part=_parts_for_sample(wildcards),
         ),
     output:
-        merged_csv="results/{sample}/tables/{sample}.AOC.merged_RELAX_Results.csv"
+        merged_csv="results/{sample}/tables/{sample}.AOC.merged_RELAX_Results.csv",
     log:
         "logs/MergeRELAXCSVs.{sample}.log",
     run:
@@ -1230,11 +1248,12 @@ rule MergeRELAXCSVs:
 rule MergeCFELCSVs:
     input:
         all_done="results/{sample}/selection/ALL_PARTITIONS.done",
-        csvs=lambda wildcards: expand("results/{{sample}}/tables/part{part}/{{sample}}.part{part}.AOC.CFEL_Results.csv",
+        csvs=lambda wildcards: expand(
+            "results/{{sample}}/tables/part{part}/{{sample}}.part{part}.AOC.CFEL_Results.csv",
             part=_parts_for_sample(wildcards),
         ),
     output:
-        merged_csv="results/{sample}/tables/{sample}.AOC.merged_CFEL_Results.csv"
+        merged_csv="results/{sample}/tables/{sample}.AOC.merged_CFEL_Results.csv",
     log:
         "logs/MergeCFELCSVs.{sample}.log",
     run:
@@ -1289,13 +1308,13 @@ rule PlotFELMerge:
                         "dN/dS MLE",
                         "p-value",
                         "adjusted_p_value",
-                        ],
-                        )
+                    ],
+                )
                 .properties(
                     width=220,
                     height=320,
                     title=f"Merged FEL profile: {wildcards.sample}",
-                    )
+                )
             )
         save_altair_with_vl_convert(
             chart, svg_path=output.output_svg, png_path=output.output_png, scale=2
@@ -1340,14 +1359,14 @@ rule PlotMEMEMerge:
                         "CodonSite",
                         "p-value",
                         "adjusted_p_value",
-                        ],
-                        )
+                    ],
+                )
                 .properties(
                     width=220,
                     height=320,
                     title=f"Merged MEME profile: {wildcards.sample}",
-                    )
-                    )
+                )
+            )
         save_altair_with_vl_convert(
             chart, svg_path=output.output_svg, png_path=output.output_png, scale=2
         )
@@ -1355,11 +1374,13 @@ rule PlotMEMEMerge:
 
 rule SelectionOverviewTable:
     input:
-        expand("results/{sample}/tables/{sample}.AOC.merged_{test}_Results.csv",
+        expand(
+            "results/{sample}/tables/{sample}.AOC.merged_{test}_Results.csv",
             sample="{sample}",
             test=["FEL", "MEME"],
         ),
-        lambda wildcards: expand("results/{{sample}}/selection/part{part}/{test}.json",
+        lambda wildcards: expand(
+            "results/{{sample}}/selection/part{part}/{test}.json",
             part=_parts_for_sample(wildcards),
             test=["ABSREL", "BUSTEDS-MH", "RELAX", "CFEL"],
         ),
@@ -1384,17 +1405,18 @@ rule SelectionOverviewTable:
                             "method": "FEL",
                             "metric": "significant_sites_FDR_0.10",
                             "value": int((subdf["adjusted_p-value"] <= 0.10).sum()),
-                            }
-                            )
-            else:
-                rows.append({
-                    "sample": wildcards.sample,
-                    "partition": "all",
-                     "method": "FEL",
-                    "metric": "significant_sites_FDR_0.10",
-                    "value": 0,
-                    }
+                        }
                     )
+            else:
+                rows.append(
+                    {
+                        "sample": wildcards.sample,
+                        "partition": "all",
+                        "method": "FEL",
+                        "metric": "significant_sites_FDR_0.10",
+                        "value": 0,
+                    }
+                )
         if not meme.empty:
             if "adjusted_p-value" in meme.columns and "Partition" in meme.columns:
                 meme["adjusted_p-value"] = pd.to_numeric(
@@ -1408,17 +1430,18 @@ rule SelectionOverviewTable:
                             "method": "MEME",
                             "metric": "significant_sites_FDR_0.10",
                             "value": int((subdf["adjusted_p-value"] <= 0.10).sum()),
-                            }
-                            )
-            else:
-                rows.append({
-                    "sample": wildcards.sample,
-                    "partition": "all",
-                    "method": "MEME",
-                    "metric": "significant_sites_FDR_0.10",
-                    "value": 0,
-                    }
+                        }
                     )
+            else:
+                rows.append(
+                    {
+                        "sample": wildcards.sample,
+                        "partition": "all",
+                        "method": "MEME",
+                        "metric": "significant_sites_FDR_0.10",
+                        "value": 0,
+                    }
+                )
         for path in input[2:]:
             test = Path(path).stem
             data = _read_json(path)
@@ -1432,8 +1455,8 @@ rule SelectionOverviewTable:
                         "method": test,
                         "metric": "status",
                         "value": "skipped",
-                        }
-                        )
+                    }
+                )
                 continue
             if test == "BUSTEDS-MH":
                 pval = data.get("test results", {}).get("p-value", None)
@@ -1444,8 +1467,8 @@ rule SelectionOverviewTable:
                         "method": test,
                         "metric": "gene_wide_pvalue",
                         "value": pval,
-                        }
-                        )
+                    }
+                )
             elif test == "RELAX":
                 tr = data.get("test results", {})
                 rows.append(
@@ -1457,8 +1480,8 @@ rule SelectionOverviewTable:
                         "value": tr.get(
                             "relaxation or intensification parameter", None
                         ),
-                        }
-                        )
+                    }
+                )
                 rows.append(
                     {
                         "sample": wildcards.sample,
@@ -1466,8 +1489,8 @@ rule SelectionOverviewTable:
                         "method": test,
                         "metric": "pvalue",
                         "value": tr.get("p-value", None),
-                        }
-                        )
+                    }
+                )
             elif test == "ABSREL":
                 branch_attrs = data.get("branch attributes", {}).get("0", {})
                 sig = 0
@@ -1497,15 +1520,22 @@ rule SelectionOverviewTable:
                     pcol = next(
                         (c for c in headers if "p-value" in c.lower()), None
                     )
-                    sig = (int((pd.to_numeric(df[pcol], errors="coerce") <= 0.10).sum()) if pcol else 0)
+                    sig = (
+                        int(
+                            (pd.to_numeric(df[pcol], errors="coerce") <= 0.10).sum()
+                        )
+                        if pcol
+                        else 0
+                    )
                 except Exception:
                     sig = 0
-                rows.append({
-                    "sample": wildcards.sample,
-                    "partition": partition,
-                    "method": test,
-                    "metric": "significant_sites_p_0.10",
-                    "value": sig,
+                rows.append(
+                    {
+                        "sample": wildcards.sample,
+                        "partition": partition,
+                        "method": test,
+                        "metric": "significant_sites_p_0.10",
+                        "value": sig,
                     }
                 )
         out = pd.DataFrame(
@@ -1549,8 +1579,24 @@ rule executive_summary:
                 if os.path.exists(input.overview)
                 else pd.DataFrame()
             )
-            fel_sig = (int((fel.get("adjusted_p-value", pd.Series(dtype=float)) <= 0.10).sum()) if not fel.empty else 0)
-            meme_sig = (int((meme.get("adjusted_p-value", pd.Series(dtype=float)) <= 0.10).sum()) if not meme.empty else 0)
+            fel_sig = (
+                int(
+                    (
+                        fel.get("adjusted_p-value", pd.Series(dtype=float)) <= 0.10
+                    ).sum()
+                )
+                if not fel.empty
+                else 0
+            )
+            meme_sig = (
+                int(
+                    (
+                        meme.get("adjusted_p-value", pd.Series(dtype=float)) <= 0.10
+                    ).sum()
+                )
+                if not meme.empty
+                else 0
+            )
             overview_html = (
                 overview.to_html(index=False)
                 if not overview.empty
