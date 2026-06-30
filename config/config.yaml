@@ -4,6 +4,7 @@
 # - `samples_csv` to point at their sample sheet
 # - `outdir` if they want results somewhere other than `results/`
 # - optional MACSE memory settings on large alignments
+# - tn93_max_seqs depending on how many sequences you want to retain (WARNING: default will only keep 20 sequences)
 
 # Core inputs / outputs
 samples_csv: config/samples.csv
@@ -13,25 +14,10 @@ outdir: results
 # If MPI should be used for GARD
 use_mpi: True
 
-# External executables
-# Leave these as-is if the tools are available on PATH in the AOC environment.
-# hyphy: hyphy
-# hyphympi: HYPHYMPI
-# fasttree: FastTree
-# macse_launcher: macse
-
-# Helper scripts / bundled resources
-# Only override these if you have moved files or want to use custom versions.
-# remove_dups_bf: scripts/remove-duplicates/remove-duplicates.bf
-# label_tree_bf: scripts/LabelTrees/label-tree.bf
-# label_gard_bf: scripts/label-gard-nexus.bf
-# strike_ambigs_bf: scripts/strike-ambigs.bf
-# make_test_list_py: scripts/make_sequence_header_map.py
-# tn93_cluster_py: scripts/tn93_cluster.py
-# merge_fel_py: scripts/MergeFELResults.py
-# merge_meme_py: scripts/MergeMEMEResults.py
-# exec_summary_py: scripts/ExecutiveSummary.py
-# macse_runner: scripts/run_macse_with_heap.sh
+# Keep all sequences (skip remove duplicates and TN93 clustering steps)
+# Currently this is the only way to ensure that all test sequences are retained, 
+# but it will also result in a much larger alignment and slower GARD runs.
+# keep_all_sequences: false
 
 # TN93 clustering
 # `tn93_threshold` controls clustering stringency before GARD.
@@ -57,6 +43,24 @@ use_mpi: True
 # Uncomment these if automatic detection is not appropriate for your environment.
 # macse_mem_mb: 65536
 # macse_heap_mb: 57344
+
+# External executables
+# Leave these as-is if the tools are available on PATH in the AOC environment.
+# hyphy: hyphy
+# fasttree: FastTree
+# macse_launcher: macse
+
+# Helper scripts / bundled resources
+# Only override these if you have moved files or want to use custom versions.
+# remove_dups_bf: scripts/remove-duplicates/remove-duplicates.bf
+# label_tree_bf: scripts/LabelTrees/label-tree.bf
+# strike_ambigs_bf: scripts/strike-ambigs.bf
+# make_test_list_py: scripts/make_sequence_header_map.py
+# tn93_cluster_py: scripts/tn93_cluster.py
+# merge_fel_py: scripts/MergeFELResults.py
+# merge_meme_py: scripts/MergeMEMEResults.py
+# exec_summary_py: scripts/ExecutiveSummary.py
+# macse_runner: scripts/run_macse_with_heap.sh
 
 # Legacy / compatibility keys
 # These are currently not consumed by the Snakefile, but are kept here so users

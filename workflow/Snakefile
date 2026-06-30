@@ -43,6 +43,9 @@ SAMPLES_CSV = config.get("samples_csv", "samples.csv")
 SEQUENCES_CSV = config.get("sequences_csv", "sequences.csv")
 TESTS_CSV = config.get("tests_csv", "tests.csv")
 
+# Settings:
+KEEP_ALL_SEQUENCES = config.get("keep_all_sequences", False)
+
 # Tools / scripts (override in config/config.yaml as needed)
 HYPHY = config.get("hyphy", "hyphy")
 HYPHYMPI = config.get("hyphympi", "HYPHYMPI")
@@ -656,9 +659,16 @@ rule tn93_cluster:
         """
 
 
+def _get_msa(wc):
+    if KEEP_ALL_SEQUENCES:
+        return rules.strike_ambigs_msa.output.sa
+    else:
+        return rules.tn93_cluster.output.cluster_fasta
+
+
 rule recombination:
     input:
-        msa=rules.tn93_cluster.output.cluster_fasta,
+        msa=_get_msa,
     output:
         gard_json=os.path.join(
             str(OUTROOT_SEQUENCE),
@@ -720,7 +730,7 @@ rule build_header_map_and_test_list:
 checkpoint parse_gard:
     input:
         bestgard=rules.recombination.output.bestgard,
-        msa=rules.remove_duplicates_msa.output.rd,
+        msa=_get_msa,
     output:
         manifest=os.path.join(
             str(OUTROOT_SEQUENCE), "{sequence}", "gard", "segments.json"
