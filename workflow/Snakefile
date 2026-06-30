@@ -11,7 +11,6 @@
 # - Logging added to every rule (log wildcards match output wildcards)
 ###############################################################################
 
-import os
 import re
 import json
 import math
@@ -34,10 +33,6 @@ alt.data_transformers.disable_max_rows()
 
 configfile: "config/config.yaml"
 
-
-BASEDIR = os.getcwd()
-OUTROOT = Path(config.get("outdir", "results"))
-OUTROOT_SEQUENCE = os.path.join(OUTROOT, "by_sequence")
 
 SAMPLES_CSV = config.get("samples_csv", "samples.csv")
 SEQUENCES_CSV = config.get("sequences_csv", "sequences.csv")
@@ -67,9 +62,10 @@ LABEL_GARD_BF = config.get(
     "label_gard_bf", workflow.source_path("scripts/label-gard-nexus.bf")
 )
 
-MAKE_TEST_LIST_PY = config.get(
-    "make_test_list_py", workflow.source_path("scripts/make_sequence_header_map.py")
+CLEAN_TEST_LIST_PY = config.get(
+    "clean_test_list_py", workflow.source_path("scripts/clean_test_list.py")
 )
+
 TN93_CLUSTER_PY = config.get(
     "tn93_cluster_py", workflow.source_path("scripts/tn93_cluster.py")
 )
@@ -79,10 +75,6 @@ TN93_CLUSTER_PY = config.get(
 # MERGE_FEL_PY = config.get("merge_fel_py", workflow.source_path("scripts/MergeFELResults.py"))
 # MERGE_MEME_PY = config.get("merge_meme_py", workflow.source_path("scripts/MergeMEMEResults.py"))
 # EXEC_SUMMARY_PY = config.get("exec_summary_py", workflow.source_path("scripts/ExecutiveSummary.py"))
-
-# Logging
-LOGDIR = os.path.join(str(OUTROOT), "logs")
-os.makedirs(LOGDIR, exist_ok=True)
 
 MACSE_LAUNCHER = config.get("macse_launcher", "macse")
 MACSE_HEAP_FRACTION = float(config.get("macse_heap_fraction", 0.875))
@@ -138,15 +130,28 @@ def _macse_heap_mb():
     return max(baseline, min(requested, usable))
 
 
+def _is_missing(x):
+    if x is None:
+        return True
+    if isinstance(x, float) and math.isnan(x):
+        return True
+    s = str(x).strip()
+    return (s == "") or (s.lower() == "nan")
+
+
 ###############################################################################
-# Read samples.csv (must include: sample, sequence, sequence_labels_csv)
+# Read samples.csv (must include: sample, sequence, test_headers)
 ###############################################################################
 
 samples_df = pd.read_csv(SAMPLES_CSV, dtype=str).copy()
-required = {"sample", "sequence", "sequence_labels_csv"}
+required = {"sample", "sequence", "test_headers"}
 missing = required.difference(samples_df.columns)
 if missing:
     raise ValueError(f"samples.csv missing required columns {sorted(missing)}")
+
+###############################################################################
+# Read sequences.csv (must include: sequence, codon_fasta)
+###############################################################################
 
 sequences_df = pd.read_csv(SEQUENCES_CSV, dtype=str).copy()
 required_seq = {"sequence", "codon_fasta"}
@@ -160,24 +165,18 @@ SEQUENCES = sequences_df["sequence"].tolist()
 CODON_FASTA_BY_SEQUENCE = dict(
     zip(sequences_df["sequence"], sequences_df["codon_fasta"])
 )
+
 SEQUENCE_BY_SAMPLE = dict(zip(samples_df["sample"], samples_df["sequence"]))
-LABELS_CSV_BY_SAMPLE = dict(
-    zip(samples_df["sample"], samples_df["sequence_labels_csv"])
-)
 
+TEST_HEADERS_BY_SAMPLE = dict(zip(samples_df["sample"], samples_df["test_headers"]))
 
-def _is_missing(x):
-    if x is None:
-        return True
-    if isinstance(x, float) and math.isnan(x):
-        return True
-    s = str(x).strip()
-    return (s == "") or (s.lower() == "nan")
-
-
-LABELS_CSV_BY_SAMPLE = {
-    k: v for k, v in LABELS_CSV_BY_SAMPLE.items() if not _is_missing(v)
+TEST_HEADERS_BY_SAMPLE = {
+    k: v for k, v in TEST_HEADERS_BY_SAMPLE.items() if not _is_missing(v)
 }
+
+###############################################################################
+# Read tests.csv (must include: program, run, direct_gard, requires_labels, plot)
+###############################################################################
 
 tests_df = pd.read_csv(TESTS_CSV, dtype=defaultdict(lambda: bool, program="str")).copy()
 required_tests = {"program", "run", "direct_gard", "requires_labels", "plot"}
@@ -185,144 +184,16 @@ missing_tests = required_tests.difference(tests_df.columns)
 if missing_tests:
     raise ValueError(f"tests.csv missing required columns {sorted(missing_tests)}")
 
-
-def codon_fasta_path(sequence):
-    return os.path.join(BASEDIR, CODON_FASTA_BY_SEQUENCE[sequence])
-
-
-def labels_csv_path(sample):
-    v = LABELS_CSV_BY_SAMPLE.get(sample, None)
-    if _is_missing(v):
-        return ""
-    return os.path.join(BASEDIR, str(v))
-
+ALL_TESTS = tests_df[tests_df["run"]]["program"].tolist()
+DIRECT_GARD_TESTS = tests_df[(tests_df["run"]) & (tests_df["direct_gard"])]["program"].tolist()
+PARTITIONED_TESTS = tests_df[(tests_df["run"]) & (~tests_df["direct_gard"])]["program"].tolist()
+REQUIRE_LABELS_TESTS = tests_df[(tests_df["run"]) & (tests_df["requires_labels"])]["program"].tolist()
+PLOTTED_TESTS = tests_df[(tests_df["run"]) & (tests_df["plot"])]["program"].tolist()
+UNPLOTTED_TESTS = tests_df[(tests_df["run"]) & (~tests_df["plot"])]["program"].tolist()
 
 ###############################################################################
-# Path helpers
+# Utility functions
 ###############################################################################
-
-# Per sequence paths
-
-
-def sequence_dir(sequence):
-    return os.path.join(str(OUTROOT_SEQUENCE), sequence)
-
-
-def gard_dir(sequence):
-    return os.path.join(sequence_dir(sequence), "gard")
-
-
-def gard_segments_dir(sequence):
-    return os.path.join(gard_dir(sequence), "segments")
-
-
-# Per sample paths
-def sample_dir(sample):
-    return os.path.join(str(OUTROOT), sample)
-
-
-def test_list_file(sample):
-    return os.path.join(sample_dir(sample), f"{sample}.test_sequences.txt")
-
-
-def empty_test_list_file(sample):
-    return os.path.join(sample_dir(sample), f"{sample}.test_sequences.EMPTY.txt")
-
-
-def selection_dir(sample):
-    return os.path.join(sample_dir(sample), "selection")
-
-
-def selection_part_dir(sample, part):
-    return os.path.join(selection_dir(sample), f"part{part}")
-
-
-def viz_dir(sample):
-    return os.path.join(sample_dir(sample), "visualizations")
-
-
-def fel_table(sample, part):
-    return os.path.join(
-        str(OUTROOT),
-        sample,
-        "tables",
-        f"part{part}",
-        f"{sample}.part{part}.AOC.FEL_Results.csv",
-    )
-
-
-def meme_table(sample, part):
-    return os.path.join(
-        str(OUTROOT),
-        sample,
-        "tables",
-        f"part{part}",
-        f"{sample}.part{part}.AOC.MEME_Results.csv",
-    )
-
-
-def absrel_table(sample, part):
-    return os.path.join(
-        str(OUTROOT),
-        sample,
-        "tables",
-        f"part{part}",
-        f"{sample}.part{part}.AOC.ABSREL_Results.csv",
-    )
-
-
-def busted_table(sample, part):
-    return os.path.join(
-        str(OUTROOT),
-        sample,
-        "tables",
-        f"part{part}",
-        f"{sample}.part{part}.AOC.BUSTEDS-MH_Results.csv",
-    )
-
-
-def relax_table(sample, part):
-    return os.path.join(
-        str(OUTROOT),
-        sample,
-        "tables",
-        f"part{part}",
-        f"{sample}.part{part}.AOC.RELAX_Results.csv",
-    )
-
-
-def cfel_table(sample, part):
-    return os.path.join(
-        str(OUTROOT),
-        sample,
-        "tables",
-        f"part{part}",
-        f"{sample}.part{part}.AOC.CFEL_Results.csv",
-    )
-
-
-def fel_plot_png(sample, part):
-    return os.path.join(viz_dir(sample), f"{sample}.part{part}.FEL.png")
-
-
-def fel_plot_svg(sample, part):
-    return os.path.join(viz_dir(sample), f"{sample}.part{part}.FEL.svg")
-
-
-def fel_legend(sample, part):
-    return os.path.join(viz_dir(sample), f"{sample}.part{part}.FEL.figureLegend")
-
-
-def meme_plot_png(sample, part):
-    return os.path.join(viz_dir(sample), f"{sample}.part{part}.MEME.png")
-
-
-def meme_plot_svg(sample, part):
-    return os.path.join(viz_dir(sample), f"{sample}.part{part}.MEME.svg")
-
-
-def meme_legend(sample, part):
-    return os.path.join(viz_dir(sample), f"{sample}.part{part}.MEME.figureLegend")
 
 
 def save_altair_with_vl_convert(
@@ -379,16 +250,15 @@ def _hyphy_content_table(data, part="0"):
 ###############################################################################
 
 
-def _test_list_for_sample(wc):
-    if LABELS_CSV_BY_SAMPLE.get(wc.sample, False):
-        return test_list_file(wc.sample)
+def _test_list_for_sample(wildcards):
+    if TEST_HEADERS_BY_SAMPLE.get(wildcards.sample, False):
+        return "results/{sample}/{sample}.test_sequences.txt"
     else:
-        return empty_test_list_file(wc.sample)
+        return "results/{sample}/{sample}.test_sequences.EMPTY.txt"
 
 
 def _branch_arg(sample):
-    p = test_list_file(sample)
-    if os.path.exists(p) and os.path.getsize(p) > 0:
+    if TEST_HEADERS_BY_SAMPLE.get(sample, False):
         return "--branches Test"
     return ""
 
@@ -411,105 +281,57 @@ def _branch_arg_gard(sample):
 ###############################################################################
 
 
+# TODO: update rules
+localrules:
+    all,
+    build_header_map_and_test_list,
+    parse_gard,
+    run_selection_all_partitions,
+    PlotFEL_partition,
+    PlotMEME_partition,
+    TableABSREL_partition,
+    TableBUSTEDS_MH_partition,
+    TableRELAX_partition,
+    TableCFEL_partition,
+    MergeFELCSVs,
+    MergeMEMECSVs,
+    MergeABSRELCSVs,
+    MergeBUSTEDS_MH_CSVs,
+    MergeRELAXCSVs,
+    MergeCFELCSVs,
+    PlotFELMerge,
+    PlotMEMEMerge,
+    SelectionOverviewTable,
+    executive_summary,
+
+
+# TODO: Correct paths
 rule all:
     input:
         # expand(
-        #     os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.RD.SA.codons.cln.fa"),
+        #     "results/{sequence}/{sequence}.RD.SA.codons.cln.fa",
         #     sequence=SEQUENCES,
         # ),
         # expand(
-        #     os.path.join(
-        #         str(OUTROOT_SEQUENCE),
-        #         "{sequence}",
-        #         "{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
-        #     ),
+        #     "results/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
         #     sequence=SEQUENCES,
         # ),
         # expand(
-        #     os.path.join(str(OUTROOT), "{sample}", "selection", "ALL_PARTITIONS.done"),
+        #     "results/{sample}/selection/ALL_PARTITIONS.done",
         #     sample=SAMPLES,
         # ),
         # expand(
-        #     os.path.join(str(OUTROOT), "{sample}", "{sample}.test_sequences.txt"),
-        #     sample=SAMPLES_WITH_LABELS,
-        # ),
-        # expand(
-        #     os.path.join(str(OUTROOT), "{sample}", "{sample}.sequence_header_map.csv"),
-        #     sample=SAMPLES_WITH_LABELS,
-        # ),
-        # expand(
-        #     os.path.join(
-        #         str(OUTROOT),
-        #         "{sample}",
-        #         "tables",
-        #         "{sample}.AOC.merged_FEL_Results.csv",
-        #     ),
+        #     "results/{sample}/tables/{sample}.AOC.merged_{test}_Results.csv",
         #     sample=SAMPLES,
+        #     test=["FEL", "MEME", "ABSREL", "BUSTEDS-MH", "RELAX", "CFEL"]
         # ),
         # expand(
-        #     os.path.join(
-        #         str(OUTROOT),
-        #         "{sample}",
-        #         "tables",
-        #         "{sample}.AOC.merged_MEME_Results.csv",
-        #     ),
+        #     "results/{sample}/visualizations/{sample}.{test}.merged.png",
         #     sample=SAMPLES,
-        # ),
-        # expand(
-        #     os.path.join(
-        #         str(OUTROOT),
-        #         "{sample}",
-        #         "tables",
-        #         "{sample}.AOC.merged_ABSREL_Results.csv",
-        #     ),
-        #     sample=SAMPLES,
-        # ),
-        # expand(
-        #     os.path.join(
-        #         str(OUTROOT),
-        #         "{sample}",
-        #         "tables",
-        #         "{sample}.AOC.merged_BUSTEDS-MH_Results.csv",
-        #     ),
-        #     sample=SAMPLES,
-        # ),
-        # expand(
-        #     os.path.join(
-        #         str(OUTROOT),
-        #         "{sample}",
-        #         "tables",
-        #         "{sample}.AOC.RELAX_Results.csv",
-        #     ),
-        #     sample=SAMPLES,
-        # ),
-        # expand(
-        #     os.path.join(
-        #         str(OUTROOT),
-        #         "{sample}",
-        #         "tables",
-        #         "{sample}.AOC.merged_CFEL_Results.csv",
-        #     ),
-        #     sample=SAMPLES,
-        # ),
-        # expand(
-        #     os.path.join(
-        #         str(OUTROOT), "{sample}", "visualizations", "{sample}.FEL.merged.png"
-        #     ),
-        #     sample=SAMPLES,
-        # ),
-        # expand(
-        #     os.path.join(
-        #         str(OUTROOT), "{sample}", "visualizations", "{sample}.MEME.merged.png"
-        #     ),
-        #     sample=SAMPLES,
+        #     test=["FEL", "MEME"]
         # ),
         expand(
-            os.path.join(
-                str(OUTROOT),
-                "{sample}",
-                "tables",
-                "{sample}.selection_overview_all_partitions.csv",
-            ),
+            "results/{sample}/tables/{sample}.selection_overview_all_partitions.csv",
             sample=SAMPLES,
         ),
 
@@ -552,12 +374,12 @@ ruleorder:
 
 rule macse:
     input:
-        fasta=lambda wc: codon_fasta_path(wc.sequence),
+        fasta=lambda wildcards: CODON_FASTA_BY_SEQUENCE[wildcards.sequence],
     output:
-        codons=os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.codons.fa"),
-        aa=os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.aa.fa"),
+        codons="results/{sequence}/{sequence}.codons.fa",
+        aa="results/{sequence}/{sequence}.aa.fa",
     log:
-        os.path.join(LOGDIR, "macse.{sequence}.log"),
+        "logs/macse.{sequence}.log",
     resources:
         mem_mb=_macse_requested_mem_mb(),
         xms_mb=MACSE_XMS_MB,
@@ -587,11 +409,9 @@ rule cln:
     input:
         codons=rules.macse.output.codons,
     output:
-        cln=os.path.join(
-            str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.codons.cln.fa"
-        ),
+        cln="results/{sequence}/{sequence}.codons.cln.fa",
     log:
-        os.path.join(LOGDIR, "cln.{sequence}.log"),
+        "logs/cln.{sequence}.log",
     shell:
         r"""
         {HYPHY} CLN Universal {input.codons} 'No/No' {output.cln} >{log} 2>&1
@@ -602,11 +422,9 @@ rule strike_ambigs_msa:
     input:
         cln=rules.cln.output.cln,
     output:
-        sa=os.path.join(
-            str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.SA.codons.cln.fa"
-        ),
+        sa="results/{sequence}/{sequence}.SA.codons.cln.fa",
     log:
-        os.path.join(LOGDIR, "strike_ambigs_msa.{sequence}.log"),
+        "logs/strike_ambigs_msa.{sequence}.log",
     shell:
         r"""
         {HYPHY} {STRIKE_AMBIGS_BF} --alignment {input.cln} --output {output.sa} >{log} 2>&1
@@ -617,11 +435,9 @@ rule remove_duplicates_msa:
     input:
         sa=rules.strike_ambigs_msa.output.sa,
     output:
-        rd=os.path.join(
-            str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.RD.SA.codons.cln.fa"
-        ),
+        rd="results/{sequence}/{sequence}.RD.SA.codons.cln.fa",
     log:
-        os.path.join(LOGDIR, "remove_duplicates_msa.{sequence}.log"),
+        "logs/remove_duplicates_msa.{sequence}.log",
     shell:
         r"""
         {HYPHY} {REMOVE_DUPS_BF} --msa {input.sa} --output {output.rd} ENV='DATA_FILE_PRINT_FORMAT=9' >{log} 2>&1
@@ -632,21 +448,13 @@ rule tn93_cluster:
     input:
         rd=rules.remove_duplicates_msa.output.rd,
     output:
-        cluster_json=os.path.join(
-            str(OUTROOT_SEQUENCE),
-            "{sequence}",
-            "{sequence}.RD.SA.codons.cln.fa.cluster.json",
-        ),
-        cluster_fasta=os.path.join(
-            str(OUTROOT_SEQUENCE),
-            "{sequence}",
-            "{sequence}.RD.SA.codons.cln.fa.cluster.fasta",
-        ),
+        cluster_json="results/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.json",
+        cluster_fasta="results/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta",
     log:
-        os.path.join(LOGDIR, "tn93_cluster.{sequence}.log"),
+        "logs/tn93_cluster.{sequence}.log",
     params:
-        threshold=lambda wc: config.get("tn93_threshold", 0.01),
-        max_seqs=lambda wc: config.get("tn93_max_seqs", 20),
+        threshold=lambda wildcards: config.get("tn93_threshold", 0.01),
+        max_seqs=lambda wildcards: config.get("tn93_max_seqs", 20),
     shell:
         r"""
         python {TN93_CLUSTER_PY} \
@@ -670,18 +478,10 @@ rule recombination:
     input:
         msa=_get_msa,
     output:
-        gard_json=os.path.join(
-            str(OUTROOT_SEQUENCE),
-            "{sequence}",
-            "{sequence}.RD.SA.codons.cln.fa.cluster.fasta.GARD.json",
-        ),
-        bestgard=os.path.join(
-            str(OUTROOT_SEQUENCE),
-            "{sequence}",
-            "{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
-        ),
+        gard_json="results/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.GARD.json",
+        bestgard="results/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
     log:
-        os.path.join(LOGDIR, "recombination.{sequence}.log"),
+        "logs/recombination.{sequence}.log",
     params:
         hyphy_command=lambda wildcards, resources: (
             f"{resources.mpi} -n {resources.tasks} {HYPHYMPI}"
@@ -698,11 +498,12 @@ rule recombination:
 ###############################################################################
 # Labels -> header map + test list (only used when labels CSV exists)
 ###############################################################################
+
 rule build_empty_test_list:
     output:
-        touch(empty_test_list_file("{sample}")),
+        touch("results/{sample}/{sample}.test_sequences.EMPTY.txt"),
     log:
-        os.path.join(LOGDIR, "build_empty_test_list.{sample}.log"),
+        "logs/build_empty_test_list.{sample}.log",
     run:
         with open(log[0], "a") as L:
             L.write(f"Created empty test list for sample {wildcards.sample}\n")
@@ -710,16 +511,20 @@ rule build_empty_test_list:
 
 rule build_header_map_and_test_list:
     input:
-        labels=lambda wc: labels_csv_path(wc.sample),
+        labels=lambda wildcards: TEST_HEADERS_BY_SAMPLE[wildcards.sample],
     output:
-        map_csv=os.path.join(
-            str(OUTROOT), "{sample}", "{sample}.sequence_header_map.csv"
-        ),
-        test_txt=os.path.join(str(OUTROOT), "{sample}", "{sample}.test_sequences.txt"),
+        map_csv="results/{sample}/{sample}.sequence_header_map.csv",
+        test_txt="results/{sample}/{sample}.test_sequences.txt",
     log:
-        os.path.join(LOGDIR, "build_header_map_and_test_list.{sample}.log"),
-    script:
-        "scripts/build_header_map_and_test_list.py"
+        "logs/build_header_map_and_test_list.{sample}.log",
+    shell:
+        r"""
+        python {CLEAN_TEST_LIST_PY} \
+            --test-headers {input.labels} \
+            --out-map {output.map_csv} \
+            --out-test {output.test_txt} \
+            >{log} 2>&1
+        """
 
 
 ###############################################################################
@@ -732,21 +537,13 @@ checkpoint parse_gard:
         bestgard=rules.recombination.output.bestgard,
         msa=_get_msa,
     output:
-        manifest=os.path.join(
-            str(OUTROOT_SEQUENCE), "{sequence}", "gard", "segments.json"
-        ),
-        segdir=directory(
-            os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "gard", "segments")
-        ),
-        ids=os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.ids.txt"),
-        log=os.path.join(str(OUTROOT_SEQUENCE), "{sequence}", "{sequence}.gard.log"),
+        segflag=touch("results/{sequence}/gard/segments/GARD_parsed.done"),
+        manifest="results/{sequence}/gard/segments.json",
+        log="results/{sequence}/{sequence}.gard.log",
+    params:
+        segments_dir=lambda wildcards, output: Path(output["segflag"]).parent,
     run:
         # Logging for checkpoint: use output.log (gard.log)
-        os.makedirs(os.path.dirname(output.log), exist_ok=True)
-        if not os.path.exists(input.bestgard):
-            raise FileNotFoundError(
-                f"[ERROR] GARD results file does not exist: {input.bestgard}"
-            )
         data = [line.strip() for line in open(input.bestgard) if "CHARSET" in line]
         if not data:
             raise ValueError(
@@ -769,7 +566,6 @@ checkpoint parse_gard:
             remainder = seg_len % 3
             data_adjusted_coords.append([start, end - remainder])
             carryOver = remainder
-        os.makedirs(gard_segments_dir(wildcards.sequence), exist_ok=True)
         manifest = {
             "sample": wildcards.sequence,
             "msa": str(input.msa),
@@ -779,9 +575,8 @@ checkpoint parse_gard:
         }
         with open(output.log, "w") as log_file:
             for i, (start, stop) in enumerate(data_adjusted_coords, start=1):
-                out_fa = os.path.join(
-                    gard_segments_dir(wildcards.sequence),
-                    f"{wildcards.sequence}.part{i}.codon.fas",
+                out_fa = (
+                    params.segments_dir / f"{wildcards.sequence}.part{i}.codon.fas"
                 )
                 with open(out_fa, "w") as out_f:
                     for record in records:
@@ -796,14 +591,11 @@ checkpoint parse_gard:
                         "part": i,
                         "start0": int(start),
                         "end_excl": int(stop),
-                        "fasta": out_fa,
+                        "fasta": str(out_fa),
                         "length": int(adjusted_len),
                     }
                 )
-        with open(output.ids, "w") as fh:
-            for record in records:
-                fh.write(f"{record.id}\n")
-        with open(output.manifest, "w") as fh:
+        with open((output.manifest), "w") as fh:
             json.dump(manifest, fh, indent=2)
 
 
@@ -813,6 +605,7 @@ checkpoint parse_gard:
 
 
 # Desired behavior:
+# TODO: FIXTHIS
 # how to get this to only run after test lists are made?
 # if labels weren't provided, then skip RELAX and CFEL
 # if the test list was empty or if there are no test sequences in the alignment, then skip everything.
@@ -836,44 +629,28 @@ def _aggregate_test_results(wc):
     # Now to format different types of tests based on direct_gard
     # programs that take direct GARD
     direct_gard = expand(
-        os.path.join(
-            str(OUTROOT), "{sample}", "tables", "{sample}.AOC.{program}_Results.csv"
-        ),
-        sample=wc.sample,
-        program=tests_to_run[(tests_to_run["direct_gard"])]["program"],
+        "results/{{sample}}/tables/{{sample}}.AOC.{program}_Results.csv",
+        program=tests_to_run[tests_to_run["direct_gard"]]["program"].tolist(),
     )
     # programs that don't take direct GARD and need to be run on each partition
     partitioned = expand(
-        os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "tables",
-            "{sample}.AOC.merged_{program}_Results.csv",
-        ),
-        sample=wc.sample,
-        program=tests_to_run[(~tests_to_run["direct_gard"])]["program"],
+        "results/{{sample}}/tables/{{sample}}.AOC.merged_{program}_Results.csv",
+        program=tests_to_run[~tests_to_run["direct_gard"]]["program"].tolist(),
     )
 
     return direct_gard + partitioned
 
 
-def _parts_for_sample(wc):
-    ck = checkpoints.parse_gard.get(sequence=SEQUENCE_BY_SAMPLE[wc.sample])
+def _parts_for_sample(wildcards):
+    ck = checkpoints.parse_gard.get(sequence=SEQUENCE_BY_SAMPLE[wildcards.sample])
     with open(ck.output.manifest) as fh:
         m = json.load(fh)
     return [str(p["part"]) for p in m["parts"]]
 
 
-# QUICKFIX: deterministic partition fasta path (no json-as-alignment bugs)
-def _partition_fasta(wc):
-    sequence = SEQUENCE_BY_SAMPLE[wc.sample]
-    return os.path.join(
-        str(OUTROOT_SEQUENCE),
-        sequence,
-        "gard",
-        "segments",
-        f"{sequence}.part{wc.part}.codon.fas",
-    )
+def _partition_fasta(wildcards):
+    sequence = SEQUENCE_BY_SAMPLE[wildcards.sample]
+    return f"results/{sequence}/gard/segments/{sequence}.part{wildcards.part}.codon.fas"
 
 
 ###############################################################################
@@ -881,23 +658,17 @@ def _partition_fasta(wc):
 ###############################################################################
 rule label_gard_TestForeground:
     input:
-        bestgard=lambda wc: expand(
-            os.path.join(
-                str(OUTROOT_SEQUENCE),
-                "{sequence}",
-                "{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
-            ),
-            sequence=SEQUENCE_BY_SAMPLE[wc.sample],
+        bestgard=lambda wildcards: expand(
+            "results/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
+            sequence=SEQUENCE_BY_SAMPLE[wildcards.sample],
         ),
         test_list=_test_list_for_sample,
     output:
         labelgard=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "{sample}.RD.SA.codons.cln.fa.cluster.fasta.best-gard.labeled",
-        ),
+            "results/{sample}/{sample}.RD.SA.codons.cln.fa.cluster.fasta.best-gard.labeled",
+            ),
     log:
-        os.path.join(LOGDIR, "label_gard_TestForeground.{sample}.log"),
+        "logs/label_gard_TestForeground.{sample}.log",
     run:
         logp = log[0] if hasattr(log, "__iter__") else str(log)
         with open(logp, "a") as L:
@@ -922,11 +693,11 @@ rule FEL:
     input:
         aln=rules.label_gard_TestForeground.output.labelgard,
     output:
-        json=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.FEL.json"),
+        json="results/{sample}/selection/{sample}.FEL.json",
     log:
-        os.path.join(LOGDIR, "FEL.{sample}.log"),
+        "logs/FEL.{sample}.log",
     params:
-        branch_arg=lambda wc: _branch_arg_gard(wc.sample),
+        branch_arg=lambda wildcards: _branch_arg_gard(wildcards.sample),
     shell:
         r"""
         {HYPHY} FEL --alignment {input.aln} --output {output.json} --ci Yes {params.branch_arg} >{log} 2>&1
@@ -937,11 +708,11 @@ rule MEME:
     input:
         aln=rules.label_gard_TestForeground.output.labelgard,
     output:
-        json=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.MEME.json"),
+        json="results/{sample}/selection/{sample}.MEME.json",
     log:
-        os.path.join(LOGDIR, "MEME.{sample}.log"),
+        "logs/MEME.{sample}.log",
     params:
-        branch_arg=lambda wc: _branch_arg_gard(wc.sample),
+        branch_arg=lambda wildcards: _branch_arg_gard(wildcards.sample),
     shell:
         r"""
         {HYPHY} MEME --alignment {input.aln} --output {output.json} {params.branch_arg} ENV='TOLERATE_NUMERICAL_ERRORS=1;' >{log} 2>&1
@@ -952,13 +723,11 @@ rule BUSTEDS_MH:
     input:
         aln=rules.label_gard_TestForeground.output.labelgard,
     output:
-        json=os.path.join(
-            str(OUTROOT), "{sample}", "selection", "{sample}.BUSTEDS-MH.json"
-        ),
+        json="results/{sample}/selection/{sample}.BUSTEDS-MH.json",
     log:
-        os.path.join(LOGDIR, "BUSTEDS_MH.{sample}.log"),
+        "logs/BUSTEDS_MH.{sample}.log",
     params:
-        branch_arg=lambda wc: _branch_arg_gard(wc.sample),
+        branch_arg=lambda wildcards: _branch_arg_gard(wildcards.sample),
     shell:
         r"""
         {HYPHY} BUSTED \
@@ -976,11 +745,10 @@ rule RELAX:
         aln=rules.label_gard_TestForeground.output.labelgard,
         test_list=_test_list_for_sample,
     output:
-        json=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.RELAX.json"),
+        json="results/{sample}/selection/{sample}.RELAX.json",
     log:
-        os.path.join(LOGDIR, "RELAX_partition.{sample}.log"),
+        "logs/RELAX.{sample}.log",
     run:
-        os.makedirs(os.path.dirname(output.json), exist_ok=True)
         logp = log[0] if hasattr(log, "__iter__") else str(log)
         with open(logp, "a") as L:
             L.write("START\n")
@@ -1014,14 +782,11 @@ rule fasttree_partition:
     input:
         aln=_partition_fasta,
     output:
-        tree=os.path.join(
-            str(OUTROOT), "{sample}", "selection", "part{part}", "FastTree.treefile"
-        ),
+        tree="results/{sample}/selection/part{part}/FastTree.treefile",
     log:
-        os.path.join(LOGDIR, "fasttree_partition.{sample}.part{part}.log"),
+        "logs/fasttree_partition.{sample}.part{part}.log",
     shell:
         r"""
-        mkdir -p {OUTROOT}/{wildcards.sample}/selection/part{wildcards.part}
         {FASTTREE} -nt -gtr {input.aln} >{output.tree} 2>{log}
         """
 
@@ -1031,19 +796,10 @@ rule label_tree_TestForeground_partition:
         tree=rules.fasttree_partition.output.tree,
         test_list=_test_list_for_sample,
     output:
-        tree=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "selection",
-            "part{part}",
-            "FastTree.labelled.treefile",
-        ),
+        tree="results/{sample}/selection/part{part}/FastTree.labelled.treefile",
     log:
-        os.path.join(
-            LOGDIR, "label_tree_TestForeground_partition.{sample}.part{part}.log"
-        ),
+        "logs/label_tree_TestForeground_partition.{sample}.part{part}.log",
     run:
-        os.makedirs(os.path.dirname(output.tree), exist_ok=True)
         with open(log[0] if hasattr(log, "__iter__") else str(log), "a") as L:
             L.write("START\n")
         if (not os.path.exists(input.test_list)) or (
@@ -1075,16 +831,13 @@ rule ABSREL_partition:
         aln=_partition_fasta,
         tree=rules.label_tree_TestForeground_partition.output.tree,
     output:
-        json=os.path.join(
-            str(OUTROOT), "{sample}", "selection", "part{part}", "ABSREL.json"
-        ),
+        json="results/{sample}/selection/part{part}/ABSREL.json",
     log:
-        os.path.join(LOGDIR, "ABSREL_partition.{sample}.part{part}.log"),
+        "logs/ABSREL_partition.{sample}.part{part}.log",
     params:
-        branch_arg=lambda wc: _branch_arg(wc.sample),
+        branch_arg=lambda wildcards: _branch_arg(wildcards.sample),
     shell:
         r"""
-        mkdir -p {OUTROOT}/{wildcards.sample}/selection/part{wildcards.part}
         {HYPHY} ABSREL --alignment {input.aln} --tree {input.tree} --output {output.json} {params.branch_arg} >{log} 2>&1
         """
 
@@ -1095,13 +848,10 @@ rule CFEL_partition:
         tree=rules.label_tree_TestForeground_partition.output.tree,
         test_list=_test_list_for_sample,
     output:
-        json=os.path.join(
-            str(OUTROOT), "{sample}", "selection", "part{part}", "CFEL.json"
-        ),
+        json="results/{sample}/selection/part{part}/CFEL.json",
     log:
-        os.path.join(LOGDIR, "CFEL_partition.{sample}.part{part}.log"),
+        "logs/CFEL_partition.{sample}.part{part}.log",
     run:
-        os.makedirs(os.path.dirname(output.json), exist_ok=True)
         logp = log[0] if hasattr(log, "__iter__") else str(log)
         with open(logp, "a") as L:
             L.write("START\n")
@@ -1131,28 +881,18 @@ rule CFEL_partition:
 ###############################################################################
 
 
-def _all_partition_jsons_for_sample(wc):
-    parts = _parts_for_sample(wc)
-    outs = []
-    for part in parts:
-        outs.extend(
-            [
-                os.path.join(selection_part_dir(wc.sample, part), "ABSREL.json"),
-                os.path.join(selection_part_dir(wc.sample, part), "CFEL.json"),
-            ]
-        )
-    return outs
-
-
 rule run_selection_all_partitions:
     input:
-        _all_partition_jsons_for_sample,
+        lambda wildcards: expand(
+            "results/{{sample}}/selection/part{part}/{test}.json",
+            part=_parts_for_sample(wildcards),
+            test=PARTITIONED_TESTS,
+        ),
     output:
-        done=os.path.join(str(OUTROOT), "{sample}", "selection", "ALL_PARTITIONS.done"),
+        done="results/{sample}/selection/ALL_PARTITIONS.done",
     log:
-        os.path.join(LOGDIR, "run_selection_all_partitions.{sample}.log"),
+        "logs/run_selection_all_partitions.{sample}.log",
     run:
-        os.makedirs(os.path.dirname(output.done), exist_ok=True)
         with open(log[0] if hasattr(log, "__iter__") else str(log), "a") as L:
             L.write("START\n")
         with open(output.done, "w") as fh:
@@ -1172,58 +912,16 @@ rule run_selection_all_partitions:
 ###############################################################################
 
 
-def _overview_inputs_for_sample(wc):
-    outs = [
-        os.path.join(
-            str(OUTROOT), wc.sample, "tables", f"{wc.sample}.AOC.merged_FEL_Results.csv"
-        ),
-        os.path.join(
-            str(OUTROOT),
-            wc.sample,
-            "tables",
-            f"{wc.sample}.AOC.merged_MEME_Results.csv",
-        ),
-    ]
-    for part in _parts_for_sample(wc):
-        for test in ["ABSREL", "BUSTEDS-MH", "RELAX", "CFEL"]:
-            outs.append(
-                os.path.join(selection_part_dir(wc.sample, part), f"{test}.json")
-            )
-    return outs
-
-
-def _overview_inputs_for_sample_all_partitions(wc):
-    outs = expand(
-        os.path.join(
-            str(OUTROOT), "{sample}", "tables", "{sample}.AOC.{test}_Results.csv"
-        ),
-        sample=wc.sample,
-        test=["FEL", "MEME", "BUSTEDS-MH", "RELAX"],
-    )
-    return outs
-
-
 rule PlotFEL:
     input:
-        json=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.FEL.json"),
+        json="results/{sample}/selection/FEL.json"
     output:
-        output_csv=os.path.join(
-            str(OUTROOT), "{sample}", "tables", "{sample}.AOC.FEL_Results.csv"
-        ),
-        output_png=os.path.join(
-            str(OUTROOT), "{sample}", "visualizations", "{sample}.FEL.png"
-        ),
-        output_svg=os.path.join(
-            str(OUTROOT), "{sample}", "visualizations", "{sample}.FEL.svg"
-        ),
-        output_figureLegend=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "visualizations",
-            "{sample}.FEL.figure_legend.txt",
-        ),
+        output_csv="results/{sample}/tables/{sample}.AOC.FEL_Results.csv",
+        output_png="results/{sample}/visualizations/{sample}.FEL.png",
+        output_svg="results/{sample}/visualizations/{sample}.FEL.svg",
+        output_figureLegend="results/{sample}/visualizations/{sample}.FEL.figure_legend.txt",
     log:
-        os.path.join(LOGDIR, "PlotFEL_partition.{sample}.log"),
+        "logs/PlotFEL_partition.{sample}.log",
     run:
         data = _read_json(input.json)
         headers = _hyphy_headers(data)
@@ -1304,25 +1002,14 @@ rule PlotFEL:
 
 rule PlotMEME:
     input:
-        json=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.MEME.json"),
+        json="results/{sample}/selection/MEME.json",
     output:
-        output_csv=os.path.join(
-            str(OUTROOT), "{sample}", "tables", "{sample}.AOC.MEME_Results.csv"
-        ),
-        output_png=os.path.join(
-            str(OUTROOT), "{sample}", "visualizations", "{sample}.MEME.png"
-        ),
-        output_svg=os.path.join(
-            str(OUTROOT), "{sample}", "visualizations", "{sample}.MEME.svg"
-        ),
-        output_figureLegend=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "visualizations",
-            "{sample}.MEME.figure_legend.txt",
-        ),
+        output_csv="results/{sample}/tables/{sample}.AOC.MEME_Results.csv",
+        output_png="results/{sample}/visualizations/{sample}.MEME.png",
+        output_svg="results/{sample}/visualizations/{sample}.MEME.svg",
+        output_figureLegend="results/{sample}/visualizations/{sample}.MEME.figure_legend.txt",
     log:
-        os.path.join(LOGDIR, "PlotMEME_partition.{sample}.log"),
+        "logs/PlotMEME.{sample}.log",
     run:
         data = _read_json(input.json)
         headers = _hyphy_headers(data)
@@ -1386,205 +1073,6 @@ rule PlotMEME:
             )
 
 
-rule PlotFEL_partition:
-    input:
-        json=os.path.join(
-            str(OUTROOT), "{sample}", "selection", "part{part}", "FEL.json"
-        ),
-    output:
-        output_csv=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "tables",
-            "part{part}",
-            "{sample}.part{part}.AOC.FEL_Results.csv",
-        ),
-        output_png=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "visualizations",
-            "part{part}",
-            "{sample}.part{part}.FEL.png",
-        ),
-        output_svg=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "visualizations",
-            "part{part}",
-            "{sample}.part{part}.FEL.svg",
-        ),
-        output_figureLegend=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "visualizations",
-            "part{part}",
-            "{sample}.part{part}.FEL.figure_legend.txt",
-        ),
-    log:
-        os.path.join(LOGDIR, "PlotFEL_partition.{sample}.part{part}.log"),
-    run:
-        data = _read_json(input.json)
-        headers = _hyphy_headers(data)
-        df = pd.DataFrame(_hyphy_content_table(data), columns=headers, dtype=float)
-        df.index += 1
-        df["CodonSite"] = df.index
-        df["adjusted_p-value"] = _safe_fdrcorrection(
-            df["p-value"].tolist(), alpha=0.10
-        )
-        os.makedirs(os.path.dirname(output.output_csv), exist_ok=True)
-        df.to_csv(output.output_csv, index=False)
-        source = (
-            df.copy()
-            .dropna()
-            .rename(
-                columns={
-                    "p-value": "p_value",
-                    "adjusted_p-value": "adjusted_p_value",
-                }
-            )
-        )
-        line = (
-            alt.Chart(source)
-            .mark_circle(clip=True, opacity=0.9, size=70)
-            .encode(
-                x=alt.X("CodonSite:Q", title="Codon site"),
-                y=alt.Y(
-                    "dN/dS MLE:Q",
-                    title="dN/dS estimate",
-                    scale=alt.Scale(
-                        domain=(0, 5), clamp=True, nice=False, type="sqrt"
-                    ),
-                ),
-                color=alt.condition(
-                    "datum.adjusted_p_value <= 0.1",
-                    alt.value("red"),
-                    alt.value("lightgray"),
-                ),
-                tooltip=[
-                    "CodonSite",
-                    "alpha",
-                    "beta",
-                    "dN/dS MLE",
-                    "p_value",
-                    "adjusted_p_value",
-                ],
-            )
-            .properties(
-                width=900,
-                height=450,
-                title=f"FEL: {wildcards.sample} part {wildcards.part}",
-            )
-        )
-        band = (
-            alt.Chart(source)
-            .mark_area(opacity=0.25)
-            .encode(x="CodonSite:Q", y="dN/dS LB:Q", y2="dN/dS UB:Q")
-        )
-        chart = band + line
-        save_altair_with_vl_convert(
-            chart, svg_path=output.output_svg, png_path=output.output_png, scale=2
-        )
-        sig = df[df["adjusted_p-value"] <= 0.10]
-        pos = sig[sig["dN/dS MLE"] > 1.0]
-        neg = sig[sig["dN/dS MLE"] < 1.0]
-        with open(output.output_figureLegend, "w") as fh:
-            fh.write(
-                f"FEL identified {len(sig)} significant codon sites in {wildcards.sample} partition {wildcards.part} at FDR <= 0.10, including {len(pos)} sites with dN/dS > 1 and {len(neg)} sites with dN/dS < 1.\n"
-            )
-
-
-rule PlotMEME_partition:
-    input:
-        json=os.path.join(
-            str(OUTROOT), "{sample}", "selection", "part{part}", "MEME.json"
-        ),
-    output:
-        output_csv=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "tables",
-            "part{part}",
-            "{sample}.part{part}.AOC.MEME_Results.csv",
-        ),
-        output_png=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "visualizations",
-            "part{part}",
-            "{sample}.part{part}.MEME.png",
-        ),
-        output_svg=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "visualizations",
-            "part{part}",
-            "{sample}.part{part}.MEME.svg",
-        ),
-        output_figureLegend=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "visualizations",
-            "part{part}",
-            "{sample}.part{part}.MEME.figure_legend.txt",
-        ),
-    log:
-        os.path.join(LOGDIR, "PlotMEME_partition.{sample}.part{part}.log"),
-    run:
-        data = _read_json(input.json)
-        headers = _hyphy_headers(data)
-        df = pd.DataFrame(_hyphy_content_table(data), columns=headers, dtype=float)
-        df.index += 1
-        df["CodonSite"] = df.index
-        df["adjusted_p-value"] = _safe_fdrcorrection(
-            df["p-value"].tolist(), alpha=0.10
-        )
-        os.makedirs(os.path.dirname(output.output_csv), exist_ok=True)
-        df.to_csv(output.output_csv, index=False)
-        source = df.copy().rename(
-            columns={
-                "p-value": "p_value",
-                "adjusted_p-value": "adjusted_p_value",
-                "beta+": "beta_plus",
-            }
-        )
-        tooltip_fields = [alt.Tooltip("CodonSite:Q", title="Codon site")]
-        if "alpha" in source.columns:
-            tooltip_fields.append(alt.Tooltip("alpha:Q", title="alpha"))
-        if "beta_plus" in source.columns:
-            tooltip_fields.append(alt.Tooltip("beta_plus:Q", title="beta+"))
-        if "p_value" in source.columns:
-            tooltip_fields.append(alt.Tooltip("p_value:Q", title="p-value"))
-        tooltip_fields.append(
-            alt.Tooltip("adjusted_p_value:Q", title="adjusted p-value")
-        )
-        chart = (
-            alt.Chart(source)
-            .mark_point(size=55)
-            .encode(
-                x=alt.X("CodonSite:Q", title="Codon site"),
-                y=alt.Y("adjusted_p_value:Q", title="Adjusted p-value"),
-                color=alt.Color(
-                    "adjusted_p_value:Q",
-                    scale=alt.Scale(scheme="reds", reverse=True),
-                ),
-                tooltip=tooltip_fields,
-            )
-            .properties(
-                width=900,
-                height=450,
-                title=f"MEME: {wildcards.sample} part {wildcards.part}",
-            )
-        )
-        save_altair_with_vl_convert(
-            chart, svg_path=output.output_svg, png_path=output.output_png, scale=2
-        )
-        sig = df[df["adjusted_p-value"] <= 0.10]
-        with open(output.output_figureLegend, "w") as fh:
-            fh.write(
-                f"MEME identified {len(sig)} significant codon sites in {wildcards.sample} partition {wildcards.part} at FDR <= 0.10, consistent with episodic selection along a subset of branches.\n"
-            )
-
-
 ###############################################################################
 # Additional selection-analysis tables
 ###############################################################################
@@ -1592,15 +1080,11 @@ rule PlotMEME_partition:
 
 rule TableBUSTEDS_MH:
     input:
-        json=os.path.join(
-            str(OUTROOT), "{sample}", "selection", "{sample}.BUSTEDS-MH.json"
-        ),
+        json="results/{sample}/selection/{sample}.BUSTEDS-MH.json",
     output:
-        csv=os.path.join(
-            str(OUTROOT), "{sample}", "tables", "{sample}.AOC.BUSTEDS-MH_Results.csv"
-        ),
+        csv="results/{sample}/tables/{sample}.AOC.BUSTEDS-MH_Results.csv",
     log:
-        os.path.join(LOGDIR, "TableBUSTEDS_MH.{sample}.log"),
+        "logs/TableBUSTEDS_MH.{sample}.log",
     run:
         data = _read_json(input.json)
         rows = []
@@ -1648,13 +1132,11 @@ rule TableBUSTEDS_MH:
 
 rule TableRELAX:
     input:
-        json=os.path.join(str(OUTROOT), "{sample}", "selection", "{sample}.RELAX.json"),
+        json="results/{sample}/selection/{sample}.RELAX.json",
     output:
-        csv=os.path.join(
-            str(OUTROOT), "{sample}", "tables", "{sample}.AOC.RELAX_Results.csv"
-        ),
+        csv="results/{sample}/tables/{sample}.AOC.RELAX_Results.csv",
     log:
-        os.path.join(LOGDIR, "TableRELAX.{sample}.log"),
+        "logs/TableRELAX.{sample}.log",
     run:
         data = _read_json(input.json)
         rows = []
@@ -1705,19 +1187,11 @@ rule TableRELAX:
 
 rule TableABSREL_partition:
     input:
-        json=os.path.join(
-            str(OUTROOT), "{sample}", "selection", "part{part}", "ABSREL.json"
-        ),
+        json="results/{sample}/selection/part{part}/ABSREL.json",
     output:
-        csv=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "tables",
-            "part{part}",
-            "{sample}.part{part}.AOC.ABSREL_Results.csv",
-        ),
+        csv="results/{sample}/tables/part{part}/{sample}.part{part}.AOC.ABSREL_Results.csv",
     log:
-        os.path.join(LOGDIR, "TableABSREL_partition.{sample}.part{part}.log"),
+        "logs/TableABSREL_partition.{sample}.part{part}.log",
     run:
         data = _read_json(input.json)
         rows = []
@@ -1778,25 +1252,16 @@ rule TableABSREL_partition:
                     }
                 )
         df = pd.DataFrame(rows)
-        os.makedirs(os.path.dirname(output.csv), exist_ok=True)
         df.to_csv(output.csv, index=False)
 
 
 rule TableCFEL_partition:
     input:
-        json=os.path.join(
-            str(OUTROOT), "{sample}", "selection", "part{part}", "CFEL.json"
-        ),
+        json="results/{sample}/selection/part{part}/CFEL.json",
     output:
-        csv=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "tables",
-            "part{part}",
-            "{sample}.part{part}.AOC.CFEL_Results.csv",
-        ),
+        csv="results/{sample}/tables/part{part}/{sample}.part{part}.AOC.CFEL_Results.csv",
     log:
-        os.path.join(LOGDIR, "TableCFEL_partition.{sample}.part{part}.log"),
+        "logs/TableCFEL_partition.{sample}.part{part}.log",
     run:
         data = _read_json(input.json)
         if data.get("skipped"):
@@ -1832,66 +1297,81 @@ rule TableCFEL_partition:
                 ).astype(int)
             else:
                 df["significant_site_0.10"] = 0
-        os.makedirs(os.path.dirname(output.csv), exist_ok=True)
         df.to_csv(output.csv, index=False)
 
 
 rule MergeABSRELCSVs:
     input:
-        all_done=os.path.join(
-            str(OUTROOT), "{sample}", "selection", "ALL_PARTITIONS.done"
+        all_done="results/{sample}/selection/ALL_PARTITIONS.done",
+        csvs=lambda wildcards: expand(
+            "results/{{sample}}/tables/part{part}/{{sample}}.part{part}.AOC.ABSREL_Results.csv",
+            part=_parts_for_sample(wildcards),
         ),
-        csvs=lambda wc: [
-            absrel_table(wc.sample, part) for part in _parts_for_sample(wc)
-        ],
     output:
-        merged_csv=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "tables",
-            "{sample}.AOC.merged_ABSREL_Results.csv",
-        ),
+        merged_csv="results/{sample}/tables/{sample}.AOC.merged_ABSREL_Results.csv",
     log:
-        os.path.join(LOGDIR, "MergeABSRELCSVs.{sample}.log"),
+        "logs/MergeABSRELCSVs.{sample}.log",
     run:
         dfs = [pd.read_csv(f) for f in input.csvs]
         out = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
-        os.makedirs(os.path.dirname(output.merged_csv), exist_ok=True)
         out.to_csv(output.merged_csv, index=False)
 
 
 rule MergeCFELCSVs:
     input:
-        all_done=os.path.join(
-            str(OUTROOT), "{sample}", "selection", "ALL_PARTITIONS.done"
+        all_done="results/{sample}/selection/ALL_PARTITIONS.done",
+        csvs=lambda wildcards: expand(
+            "results/{{sample}}/tables/part{part}/{{sample}}.part{part}.AOC.CFEL_Results.csv",
+            part=_parts_for_sample(wildcards),
         ),
-        csvs=lambda wc: [cfel_table(wc.sample, part) for part in _parts_for_sample(wc)],
     output:
-        merged_csv=os.path.join(
-            str(OUTROOT), "{sample}", "tables", "{sample}.AOC.merged_CFEL_Results.csv"
-        ),
+        merged_csv="results/{sample}/tables/{sample}.AOC.merged_CFEL_Results.csv",
     log:
-        os.path.join(LOGDIR, "MergeCFELCSVs.{sample}.log"),
+        "logs/MergeCFELCSVs.{sample}.log",
     run:
         dfs = [pd.read_csv(f) for f in input.csvs]
         out = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
-        os.makedirs(os.path.dirname(output.merged_csv), exist_ok=True)
         out.to_csv(output.merged_csv, index=False)
 
 
-# add cfel and absrel
+def _overview_inputs_for_sample(wc):
+    outs = [
+        os.path.join(
+            str(OUTROOT), wc.sample, "tables", f"{wc.sample}.AOC.merged_FEL_Results.csv"
+        ),
+        os.path.join(
+            str(OUTROOT),
+            wc.sample,
+            "tables",
+            f"{wc.sample}.AOC.merged_MEME_Results.csv",
+        ),
+    ]
+    for part in _parts_for_sample(wc):
+        for test in ["ABSREL", "BUSTEDS-MH", "RELAX", "CFEL"]:
+            outs.append(
+                os.path.join(selection_part_dir(wc.sample, part), f"{test}.json")
+            )
+    return outs
+
+
+def _overview_inputs_for_sample_all_partitions(wc):
+    outs = expand(
+        "results/{{sample}}/tables/{{sample}}.AOC.{test}_Results.csv",
+        test=["FEL", "MEME", "BUSTEDS-MH", "RELAX"],
+    )
+    return outs
+
+
 rule SelectionOverviewTable_all_partitions:
     input:
-        _overview_inputs_for_sample_all_partitions,
+        expand(
+            "results/{{sample}}/tables/{{sample}}.AOC.{test}_Results.csv",
+            test=["FEL", "MEME"],
+        )
     output:
-        csv=os.path.join(
-            str(OUTROOT),
-            "{sample}",
-            "tables",
-            "{sample}.selection_overview_all_partitions.csv",
-        ),
+        csv="results/{sample}/tables/{sample}.selection_overview_all_partitions.csv",
     log:
-        os.path.join(LOGDIR, "SelectionOverviewTable.{sample}.log"),
+        "logs/SelectionOverviewTable.{sample}.log"
     run:
         rows = []
         fel = pd.read_csv(input.fel)
@@ -2011,13 +1491,20 @@ rule SelectionOverviewTable_all_partitions:
 # remove
 rule SelectionOverviewTable:
     input:
-        _overview_inputs_for_sample,
-    output:
-        csv=os.path.join(
-            str(OUTROOT), "{sample}", "tables", "{sample}.selection_overview.csv"
+        expand(
+            "results/{sample}/tables/{sample}.AOC.merged_{test}_Results.csv",
+            sample="{sample}",
+            test=["FEL", "MEME"],
         ),
+        lambda wildcards: expand(
+            "results/{{sample}}/selection/part{part}/{test}.json",
+            part=_parts_for_sample(wildcards),
+            test=["ABSREL", "BUSTEDS-MH", "RELAX", "CFEL"],
+        ),
+    output:
+        csv="results/{sample}/tables/{sample}.selection_overview.csv",
     log:
-        os.path.join(LOGDIR, "SelectionOverviewTable.{sample}.log"),
+        "logs/SelectionOverviewTable.{sample}.log",
     run:
         rows = []
         fel = pd.read_csv(input[0]) if os.path.exists(input[0]) else pd.DataFrame()
@@ -2171,7 +1658,6 @@ rule SelectionOverviewTable:
         out = pd.DataFrame(
             rows, columns=["sample", "partition", "method", "metric", "value"]
         )
-        os.makedirs(os.path.dirname(output.csv), exist_ok=True)
         out.to_csv(output.csv, index=False)
 
 

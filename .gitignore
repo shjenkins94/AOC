@@ -2,6 +2,7 @@
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+.envrc
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -12,6 +13,7 @@ logs/**
 .snakemake/**
 .test/results/*
 .test/results*/*
+.test/logs/**
 workflow/notebooks/.ipynb_checkpoints/**
 **/.Rhistory
 **/*.Rproj

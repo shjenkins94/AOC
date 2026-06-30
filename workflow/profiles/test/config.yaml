@@ -1,4 +1,4 @@
-configfile: .test/config/config.yaml
+directory: .test
 printshellcmds: True
 reason: True
 cores: 4
@@ -7,5 +7,5 @@ default-resources:
 set-resources:
   # use_mpi must be set to True for these to take effect
   recombination:
-    tasks: 20
+    tasks: 16
     mpi: "mpirun"

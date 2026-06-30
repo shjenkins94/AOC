@@ -7,9 +7,8 @@
 # - tn93_max_seqs depending on how many sequences you want to retain (WARNING: default will only keep 20 sequences)
 
 # Core inputs / outputs
-samples_csv: .test/config/tiny_samples.csv
-sequences_csv: .test/config/tiny_sequences.csv
-outdir: .test/results
+samples_csv: config/tiny_samples.csv
+sequences_csv: config/tiny_sequences.csv
 
 # If MPI should be used for GARD
 use_mpi: True
