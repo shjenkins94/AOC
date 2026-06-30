@@ -1,4 +1,4 @@
-sample,sequence,sequence_labels_csv
+sample,sequence,test_headers
 tiny,BDNF,
-tiny1,BDNF,.tests/resources/tiny1_sequence_labels.csv
-tiny2,BDNF,.tests/resources/tiny2_sequence_labels.csv
+tiny1,BDNF,.tests/resources/tiny1_test_headers.txt
+tiny2,BDNF,.tests/resources/tiny2_test_headers.txt

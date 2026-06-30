@@ -130,14 +130,18 @@ def _macse_heap_mb():
 
 
 ###############################################################################
-# Read samples.csv (must include: sample, sequence, sequence_labels_csv)
+# Read samples.csv (must include: sample, sequence, test_headers)
 ###############################################################################
 
 samples_df = pd.read_csv(SAMPLES_CSV, dtype=str).copy()
-required = {"sample", "sequence", "sequence_labels_csv"}
+required = {"sample", "sequence", "test_headers"}
 missing = required.difference(samples_df.columns)
 if missing:
     raise ValueError(f"samples.csv missing required columns {sorted(missing)}")
+
+###############################################################################
+# Read sequences.csv (must include: sequence, codon_fasta)
+###############################################################################
 
 sequences_df = pd.read_csv(SEQUENCES_CSV, dtype=str).copy()
 required_seq = {"sequence", "codon_fasta"}
@@ -152,8 +156,8 @@ CODON_FASTA_BY_SEQUENCE = dict(
     zip(sequences_df["sequence"], sequences_df["codon_fasta"])
 )
 SEQUENCE_BY_SAMPLE = dict(zip(samples_df["sample"], samples_df["sequence"]))
-LABELS_CSV_BY_SAMPLE = dict(
-    zip(samples_df["sample"], samples_df["sequence_labels_csv"])
+TEST_HEADERS_BY_SAMPLE = dict(
+    zip(samples_df["sample"], samples_df["test_headers"])
 )
 
 
@@ -170,8 +174,8 @@ def codon_fasta_path(sequence):
     return os.path.join(BASEDIR, CODON_FASTA_BY_SEQUENCE[sequence])
 
 
-def labels_csv_path(sample):
-    v = LABELS_CSV_BY_SAMPLE.get(sample, None)
+def test_headers_path(sample):
+    v = TEST_HEADERS_BY_SAMPLE.get(sample, None)
     if _is_missing(v):
         return ""
     return os.path.join(BASEDIR, str(v))
@@ -678,7 +682,7 @@ rule recombination:
 
 rule build_header_map_and_test_list:
     input:
-        labels=lambda wc: labels_csv_path(wc.sample),
+        labels=lambda wc: test_headers_path(wc.sample),
     output:
         map_csv=os.path.join(
             str(OUTROOT), "{sample}", "{sample}.sequence_header_map.csv"
@@ -686,8 +690,14 @@ rule build_header_map_and_test_list:
         test_txt=os.path.join(str(OUTROOT), "{sample}", "{sample}.test_sequences.txt"),
     log:
         os.path.join(LOGDIR, "build_header_map_and_test_list.{sample}.log"),
-    script:
-        "scripts/build_header_map_and_test_list.py"
+    shell:
+        r"""
+        python {CLEAN_TEST_LIST_PY} \
+            --test-headers {input.labels} \
+            --out-map {output.map_csv} \
+            --out-test {output.test_txt} \
+            >{log} 2>&1
+        """
 
 
 ###############################################################################
