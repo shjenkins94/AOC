@@ -92,12 +92,12 @@ def main():
     ap = argparse.ArgumentParser(
         description="Build normalized header mapping CSV and Test-set list (FASTA-free)."
     )
-    ap.add_argument("--test", required=True)
+    ap.add_argument("--test-headers", required=True)
     ap.add_argument("--out-map", required=True)
     ap.add_argument("--out-test", required=True)
     args = ap.parse_args()
 
-    raw_headers = Path(args.test)
+    raw_headers = Path(args.test_headers)
     out_map = Path(args.out_map)
     out_test = Path(args.out_test)
 

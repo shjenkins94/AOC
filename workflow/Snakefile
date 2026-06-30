@@ -53,9 +53,10 @@ LABEL_TREE_BF = config.get(
     "label_tree_bf", workflow.source_path("scripts/LabelTrees/label-tree.bf")
 )
 
-MAKE_TEST_LIST_PY = config.get(
-    "make_test_list_py", workflow.source_path("scripts/make_sequence_header_map.py")
+CLEAN_TEST_LIST_PY = config.get(
+    "clean_test_list_py", workflow.source_path("scripts/clean_test_list.py")
 )
+
 TN93_CLUSTER_PY = config.get(
     "tn93_cluster_py", workflow.source_path("scripts/tn93_cluster.py")
 )
@@ -226,14 +227,14 @@ def _hyphy_content_table(data):
 
 
 def _test_list_for_sample(wildcards):
-    if LABELS_CSV_BY_SAMPLE.get(wildcards.sample, False):
+    if TEST_HEADERS_BY_SAMPLE.get(wildcards.sample, False):
         return "results/{sample}/{sample}.test_sequences.txt"
     else:
         return "results/{sample}/{sample}.test_sequences.EMPTY.txt"
 
 
 def _branch_arg(sample):
-    if LABELS_CSV_BY_SAMPLE.get(sample, False):
+    if TEST_HEADERS_BY_SAMPLE.get(sample, False):
         return "--branches Test"
     return ""
 
@@ -247,6 +248,27 @@ def _branch_arg(sample):
 # - summarize complete (EXEC_SUMMARY.done)
 ###############################################################################
 
+localrules: 
+    all, 
+    build_header_map_and_test_list, 
+    parse_gard, 
+    run_selection_all_partitions, 
+    PlotFEL_partition, 
+    PlotMEME_partition, 
+    TableABSREL_partition,
+    TableBUSTEDS_MH_partition, 
+    TableRELAX_partition, 
+    TableCFEL_partition,
+    MergeFELCSVs,
+    MergeMEMECSVs,
+    MergeABSRELCSVs,
+    MergeBUSTEDS_MH_CSVs,
+    MergeRELAXCSVs,
+    MergeCFELCSVs,
+    PlotFELMerge,
+    PlotMEMEMerge,
+    SelectionOverviewTable,
+    executive_summary
 
 rule all:
     input:
@@ -275,15 +297,16 @@ rule all:
         #     sample=SAMPLES,
         #     test=["FEL", "MEME", "ABSREL", "BUSTEDS-MH", "RELAX", "CFEL"]
         # ),
-        expand(
-            "results/{sample}/tables/{sample}.selection_overview.csv",
-            sample=SAMPLES,
-        ),
         # expand(
         #     "results/{sample}/visualizations/{sample}.{test}.merged.png",
         #     sample=SAMPLES,
         #     test=["FEL", "MEME"]
         # ),
+        expand(
+            "results/{sample}/tables/{sample}.selection_overview.csv",
+            sample=SAMPLES,
+        ),
+
 
 
 ###############################################################################
@@ -430,6 +453,12 @@ rule recombination:
         bestgard="results/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
     log:
         "logs/recombination.{sequence}.log",
+    params:
+        hyphy_command=lambda wildcards, resources: (
+            f"{resources.mpi} -n {resources.tasks} {HYPHYMPI}"
+            if config.get("use_mpi", False)
+            else HYPHY
+        ),
     shell:
         r"""
         {params.hyphy_command} GARD --alignment {input.msa} --rv GDD --output {output.gard_json} --mode Faster ENV='TOLERATE_NUMERICAL_ERRORS=1;' \
@@ -554,6 +583,10 @@ def _parts_for_sample(wildcards):
     return [str(p["part"]) for p in m["parts"]]
 
 
+def _partition_fasta(wildcards):
+    sequence = SEQUENCE_BY_SAMPLE[wildcards.sample]
+    return f"results/{sequence}/gard/segments/{sequence}.part{wildcards.part}.codon.fas"
+
 ###############################################################################
 # Selection analysis per partition
 ###############################################################################
@@ -561,7 +594,7 @@ def _parts_for_sample(wildcards):
 
 rule fasttree_partition:
     input:
-        aln="results/{sample}/gard/segments/{sample}.part{part}.codon.fas",
+        aln=_partition_fasta,
     output:
         tree="results/{sample}/selection/part{part}/FastTree.treefile",
     log:
@@ -609,7 +642,7 @@ rule label_tree_TestForeground_partition:
 
 rule FEL_partition:
     input:
-        aln="results/{sample}/gard/segments/{sample}.part{part}.codon.fas",
+        aln=_partition_fasta,
         tree=rules.label_tree_TestForeground_partition.output.tree,
     output:
         json="results/{sample}/selection/part{part}/FEL.json",
@@ -625,7 +658,7 @@ rule FEL_partition:
 
 rule MEME_partition:
     input:
-        aln="results/{sample}/gard/segments/{sample}.part{part}.codon.fas",
+        aln=_partition_fasta,
         tree=rules.label_tree_TestForeground_partition.output.tree,
     output:
         json="results/{sample}/selection/part{part}/MEME.json",
@@ -641,7 +674,7 @@ rule MEME_partition:
 
 rule ABSREL_partition:
     input:
-        aln="results/{sample}/gard/segments/{sample}.part{part}.codon.fas",
+        aln=_partition_fasta,
         tree=rules.label_tree_TestForeground_partition.output.tree,
     output:
         json="results/{sample}/selection/part{part}/ABSREL.json",
@@ -657,7 +690,7 @@ rule ABSREL_partition:
 
 rule BUSTEDS_MH_partition:
     input:
-        aln="results/{sample}/gard/segments/{sample}.part{part}.codon.fas",
+        aln=_partition_fasta,
         tree=rules.label_tree_TestForeground_partition.output.tree,
     output:
         json="results/{sample}/selection/part{part}/BUSTEDS-MH.json",
@@ -680,7 +713,7 @@ rule BUSTEDS_MH_partition:
 
 rule RELAX_partition:
     input:
-        aln="results/{sample}/gard/segments/{sample}.part{part}.codon.fas",
+        aln=_partition_fasta,
         tree=rules.label_tree_TestForeground_partition.output.tree,
         test_list=_test_list_for_sample,
     output:
@@ -714,7 +747,7 @@ rule RELAX_partition:
 
 rule CFEL_partition:
     input:
-        aln="results/{sample}/gard/segments/{sample}.part{part}.codon.fas",
+        aln=_partition_fasta,
         tree=rules.label_tree_TestForeground_partition.output.tree,
         test_list=_test_list_for_sample,
     output:

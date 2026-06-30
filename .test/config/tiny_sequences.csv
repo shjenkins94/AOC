@@ -1,2 +1,2 @@
 sequence,codon_fasta
-BDNF,.test/resources/tiny.fasta
+BDNF,resources/tiny.fasta
