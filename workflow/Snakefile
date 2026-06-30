@@ -159,9 +159,7 @@ CODON_FASTA_BY_SEQUENCE = dict(
 
 SEQUENCE_BY_SAMPLE = dict(zip(samples_df["sample"], samples_df["sequence"]))
 
-TEST_HEADERS_BY_SAMPLE = dict(
-    zip(samples_df["sample"], samples_df["test_headers"])
-)
+TEST_HEADERS_BY_SAMPLE = dict(zip(samples_df["sample"], samples_df["test_headers"]))
 
 TEST_HEADERS_BY_SAMPLE = {
     k: v for k, v in TEST_HEADERS_BY_SAMPLE.items() if not _is_missing(v)
@@ -171,6 +169,7 @@ TEST_HEADERS_BY_SAMPLE = {
 ###############################################################################
 # Utility functions
 ###############################################################################
+
 
 def save_altair_with_vl_convert(
     chart, *, png_path=None, svg_path=None, scale=2, ppi=None
@@ -248,16 +247,17 @@ def _branch_arg(sample):
 # - summarize complete (EXEC_SUMMARY.done)
 ###############################################################################
 
-localrules: 
-    all, 
-    build_header_map_and_test_list, 
-    parse_gard, 
-    run_selection_all_partitions, 
-    PlotFEL_partition, 
-    PlotMEME_partition, 
+
+localrules:
+    all,
+    build_header_map_and_test_list,
+    parse_gard,
+    run_selection_all_partitions,
+    PlotFEL_partition,
+    PlotMEME_partition,
     TableABSREL_partition,
-    TableBUSTEDS_MH_partition, 
-    TableRELAX_partition, 
+    TableBUSTEDS_MH_partition,
+    TableRELAX_partition,
     TableCFEL_partition,
     MergeFELCSVs,
     MergeMEMECSVs,
@@ -268,7 +268,8 @@ localrules:
     PlotFELMerge,
     PlotMEMEMerge,
     SelectionOverviewTable,
-    executive_summary
+    executive_summary,
+
 
 rule all:
     input:
@@ -306,7 +307,6 @@ rule all:
             "results/{sample}/tables/{sample}.selection_overview.csv",
             sample=SAMPLES,
         ),
-
 
 
 ###############################################################################
@@ -586,6 +586,7 @@ def _parts_for_sample(wildcards):
 def _partition_fasta(wildcards):
     sequence = SEQUENCE_BY_SAMPLE[wildcards.sample]
     return f"results/{sequence}/gard/segments/{sequence}.part{wildcards.part}.codon.fas"
+
 
 ###############################################################################
 # Selection analysis per partition
