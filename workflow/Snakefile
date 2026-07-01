@@ -1338,125 +1338,197 @@ rule SelectionOverviewTable_all_partitions:
     input:
         unpack(_aggregate_test_results),
     output:
-        csv=touch("results/{sample}/tables/{sample}.selection_overview_all_partitions.csv"),
+        csv="results/{sample}/tables/{sample}.selection_overview_all_partitions.csv",
     log:
         "logs/SelectionOverviewTable.{sample}.log"
     run:
-        print(input)
+        rows = []
+        if input.get("skipped"):
+            rows.append(
+                {
+                    "sample": wildcards.sample,
+                    "partition": None,
+                    "method": "All",
+                    "metric": "status",
+                    "value": "skipped",
+                }
+            )
+        else:
+            if input.get("FEL"):
+                fel = pd.read_csv(input.FEL)
+                if not fel.empty:
+                    if "adjusted_p-value" in fel.columns and "Partition" in fel.columns:
+                        fel["adjusted_p-value"] = pd.to_numeric(
+                            fel["adjusted_p-value"], errors="coerce"
+                        )
+                        for part, subdf in fel.groupby("Partition"):
+                            rows.append(
+                                {
+                                    "sample": wildcards.sample,
+                                    "partition": part,
+                                    "method": "FEL",
+                                    "metric": "significant_sites_FDR_0.10",
+                                    "value": int((subdf["adjusted_p-value"] <= 0.10).sum()),
+                                }
+                            )
+                    else:
+                        rows.append(
+                            {
+                                "sample": wildcards.sample,
+                                "partition": "all",
+                                "method": "FEL",
+                                "metric": "significant_sites_FDR_0.10",
+                                "value": 0,
+                            }
+                        )
+            if input.get("MEME"):
+                meme = pd.read_csv(input.MEME)
+                if not meme.empty:
+                    if "adjusted_p-value" in meme.columns and "Partition" in meme.columns:
+                        meme["adjusted_p-value"] = pd.to_numeric(
+                            meme["adjusted_p-value"], errors="coerce"
+                        )
+                        for part, subdf in meme.groupby("Partition"):
+                            rows.append(
+                                {
+                                    "sample": wildcards.sample,
+                                    "partition": part,
+                                    "method": "MEME",
+                                    "metric": "significant_sites_FDR_0.10",
+                                    "value": int((subdf["adjusted_p-value"] <= 0.10).sum()),
+                                }
+                            )
+                    else:
+                        rows.append(
+                            {
+                                "sample": wildcards.sample,
+                                "partition": "all",
+                                "method": "MEME",
+                                "metric": "significant_sites_FDR_0.10",
+                                "value": 0,
+                            }
+                        )
+            if input.get("BUSTEDS-MH"):
+                busted_data = _read_json(input.get("BUSTEDS-MH"))
+                if busted_data.get("skipped"):
+                    rows.append(
+                        {
+                            "sample": wildcards.sample,
+                            "partition": None,
+                            "method": "BUSTEDS-MH",
+                            "metric": "status",
+                            "value": "skipped",
+                        }
+                    )
+                else:
+                    pval = busted_data.get("test results", {}).get("p-value", None)
+                    rows.append(
+                        {
+                            "sample": wildcards.sample,
+                            "partition": "All",
+                            "method": "BUSTEDS-MH",
+                            "metric": "gene_wide_pvalue",
+                            "value": pval,
+                        }
+                    )
+            if input.get("RELAX"):
+                relax_data = _read_json(input.RELAX)
+                if relax_data.get("skipped"):
+                    rows.append(
+                        {
+                            "sample": wildcards.sample,
+                            "partition": None,
+                            "method": "RELAX",
+                            "metric": "status",
+                            "value": "skipped",
+                        }
+                    )
+                else:
+                    tr = relax_data.get("test results", {})
+                    rows.append(
+                        {
+                            "sample": wildcards.sample,
+                            "partition": "All",
+                            "method": "RELAX",
+                            "metric": "k",
+                            "value": tr.get(
+                                "relaxation or intensification parameter", None
+                            ),
+                        }
+                    )
+                    rows.append(
+                        {
+                            "sample": wildcards.sample,
+                            "partition": "All",
+                            "method": "RELAX",
+                            "metric": "pvalue",
+                            "value": tr.get("p-value", None),
+                        }
+                    )
+            if input.get("ABSREL"):
+                for absrel_part in input.ABSREL:
+                    absrel_data = _read_json(absrel_part)
+                    part_match = re.search(r"/part(\d+)/", str(absrel_part))
+                    partition = int(part_match.group(1)) if part_match else None
 
-        # rows = []
-        # fel = pd.read_csv(input.fel)
-        # meme = pd.read_csv(input.meme)
-        # if not fel.empty:
-        #     if "adjusted_p-value" in fel.columns and "Partition" in fel.columns:
-        #         fel["adjusted_p-value"] = pd.to_numeric(
-        #             fel["adjusted_p-value"], errors="coerce"
-        #         )
-        #         for part, subdf in fel.groupby("Partition"):
-        #             rows.append(
-        #                 {
-        #                     "sample": wildcards.sample,
-        #                     "partition": part,
-        #                     "method": "FEL",
-        #                     "metric": "significant_sites_FDR_0.10",
-        #                     "value": int((subdf["adjusted_p-value"] <= 0.10).sum()),
-        #                 }
-        #             )
-        #     else:
-        #         rows.append(
-        #             {
-        #                 "sample": wildcards.sample,
-        #                 "partition": "all",
-        #                 "method": "FEL",
-        #                 "metric": "significant_sites_FDR_0.10",
-        #                 "value": 0,
-        #             }
-        #         )
-        # if not meme.empty:
-        #     if "adjusted_p-value" in meme.columns and "Partition" in meme.columns:
-        #         meme["adjusted_p-value"] = pd.to_numeric(
-        #             meme["adjusted_p-value"], errors="coerce"
-        #         )
-        #         for part, subdf in meme.groupby("Partition"):
-        #             rows.append(
-        #                 {
-        #                     "sample": wildcards.sample,
-        #                     "partition": part,
-        #                     "method": "MEME",
-        #                     "metric": "significant_sites_FDR_0.10",
-        #                     "value": int((subdf["adjusted_p-value"] <= 0.10).sum()),
-        #                 }
-        #             )
-        #     else:
-        #         rows.append(
-        #             {
-        #                 "sample": wildcards.sample,
-        #                 "partition": "all",
-        #                 "method": "MEME",
-        #                 "metric": "significant_sites_FDR_0.10",
-        #                 "value": 0,
-        #             }
-        #         )
-        # busted_data = _read_json(input.busted)
-        # if busted_data.get("skipped"):
-        #     rows.append(
-        #         {
-        #             "sample": wildcards.sample,
-        #             "partition": None,
-        #             "method": "BUSTEDS-MH",
-        #             "metric": "status",
-        #             "value": "skipped",
-        #         }
-        #     )
-        # else:
-        #     pval = busted_data.get("test results", {}).get("p-value", None)
-        #     rows.append(
-        #         {
-        #             "sample": wildcards.sample,
-        #             "partition": "All",
-        #             "method": "BUSTEDS-MH",
-        #             "metric": "gene_wide_pvalue",
-        #             "value": pval,
-        #         }
-        #     )
-        # relax_data = _read_json(input.relax)
-        # if relax_data.get("skipped"):
-        #     rows.append(
-        #         {
-        #             "sample": wildcards.sample,
-        #             "partition": None,
-        #             "method": "RELAX",
-        #             "metric": "status",
-        #             "value": "skipped",
-        #         }
-        #     )
-        # else:
-        #     tr = relax_data.get("test results", {})
-        #     rows.append(
-        #         {
-        #             "sample": wildcards.sample,
-        #             "partition": "All",
-        #             "method": "RELAX",
-        #             "metric": "k",
-        #             "value": tr.get(
-        #                 "relaxation or intensification parameter", None
-        #             ),
-        #         }
-        #     )
-        #     rows.append(
-        #         {
-        #             "sample": wildcards.sample,
-        #             "partition": "All",
-        #             "method": "RELAX",
-        #             "metric": "pvalue",
-        #             "value": tr.get("p-value", None),
-        #         }
-        #     )
-        # out = pd.DataFrame(
-        #     rows, columns=["sample", "partition", "method", "metric", "value"]
-        # )
-        # os.makedirs(os.path.dirname(output.csv), exist_ok=True)
-        # out.to_csv(output.csv, index=False)
+                    branch_attrs = absrel_data.get("branch attributes", {}).get("0", {})
+                    sig = 0
+                    for _, vals in branch_attrs.items():
+                        if not isinstance(vals, dict):
+                            continue
+                        cp = vals.get("Corrected P-value", 1.0)
+                        try:
+                            cp = float(cp)
+                        except (TypeError, ValueError):
+                            cp = 1.0
+                        if cp <= 0.10:
+                            sig += 1
+                    rows.append(
+                        {
+                            "sample": wildcards.sample,
+                            "partition": partition,
+                            "method": "ABSREL",
+                            "metric": "significant_branches",
+                            "value": sig,
+                        }
+                    )
+            if input.get("CFEL"):
+                for cfel_part in input.CFEL:
+                    cfel_data = _read_json(cfel_part)
+                    part_match = re.search(r"/part(\d+)/", str(cfel_part))
+                    partition = int(part_match.group(1)) if part_match else None
+
+                    try:
+                        headers = [x[0] for x in cfel_data["MLE"]["headers"]]
+                        df = pd.DataFrame(
+                            cfel_data["MLE"]["content"]["0"], columns=headers
+                        )
+                        pcol = next(
+                            (c for c in headers if "p-value" in c.lower()), None
+                        )
+                        sig = (
+                            int(
+                                (pd.to_numeric(df[pcol], errors="coerce") <= 0.10).sum()
+                            )
+                            if pcol
+                            else 0
+                        )
+                    except Exception:
+                        sig = 0
+                    rows.append(
+                        {
+                            "sample": wildcards.sample,
+                            "partition": partition,
+                            "method": "CFEL",
+                            "metric": "significant_sites_p_0.10",
+                            "value": sig,
+                        }
+                    )
+
+        out = pd.DataFrame(
+            rows, columns=["sample", "partition", "method", "metric", "value"]
+        )
+        out.to_csv(output.csv, index=False)
 
 
 # remove
