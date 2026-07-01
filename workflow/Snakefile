@@ -62,8 +62,8 @@ LABEL_GARD_BF = config.get(
     "label_gard_bf", workflow.source_path("scripts/label-gard-nexus.bf")
 )
 
-CLEAN_TEST_LIST_PY = config.get(
-    "clean_test_list_py", workflow.source_path("scripts/clean_test_list.py")
+CHECK_MSA_PY = config.get(
+    "check_msa_py", workflow.source_path("scripts/check_msa.py")
 )
 
 TN93_CLUSTER_PY = config.get(
@@ -250,11 +250,11 @@ def _hyphy_content_table(data, part="0"):
 ###############################################################################
 
 
-def _test_list_for_sample(wildcards):
-    if TEST_HEADERS_BY_SAMPLE.get(wildcards.sample, False):
-        return "results/{sample}/{sample}.test_sequences.txt"
-    else:
-        return "results/{sample}/{sample}.test_sequences.EMPTY.txt"
+# def _test_list_for_sample(wildcards):
+#     if TEST_HEADERS_BY_SAMPLE.get(wildcards.sample, False):
+#         return f"results/{{sample}}/{{sample}}.{SEQUENCE_BY_SAMPLE[wildcards.sample]}.test_sequences.txt"
+#     else:
+#         return []
 
 
 def _branch_arg(sample):
@@ -265,8 +265,7 @@ def _branch_arg(sample):
 
 # Seems like nexus files get imported with all-uppercase labels, so also check for uppercase "TEST"
 def _branch_arg_gard(sample):
-    p = test_list_file(sample)
-    if os.path.exists(p) and os.path.getsize(p) > 0:
+    if TEST_HEADERS_BY_SAMPLE.get(sample, False):
         return "--branches TEST"
     return ""
 
@@ -284,25 +283,18 @@ def _branch_arg_gard(sample):
 # TODO: update rules
 localrules:
     all,
-    build_header_map_and_test_list,
+    check_msa,
     parse_gard,
     run_selection_all_partitions,
-    PlotFEL_partition,
-    PlotMEME_partition,
+    PlotFEL,
+    PlotMEME,
     TableABSREL_partition,
-    TableBUSTEDS_MH_partition,
-    TableRELAX_partition,
     TableCFEL_partition,
-    MergeFELCSVs,
-    MergeMEMECSVs,
+    TableBUSTEDS_MH,
+    TableRELAX,
     MergeABSRELCSVs,
-    MergeBUSTEDS_MH_CSVs,
-    MergeRELAXCSVs,
     MergeCFELCSVs,
-    PlotFELMerge,
-    PlotMEMEMerge,
     SelectionOverviewTable,
-    executive_summary,
 
 
 # TODO: Correct paths
@@ -347,28 +339,27 @@ ruleorder:
     > strike_ambigs_msa
     > remove_duplicates_msa
     > tn93_cluster
+    > check_msa
     > recombination
-    > build_header_map_and_test_list
+    > label_gard_TestForeground
+    > FEL
+    > MEME
+    > BUSTEDS_MH
+    > RELAX
     > parse_gard
     > fasttree_partition
     > label_tree_TestForeground_partition
     > ABSREL_partition
     > CFEL_partition
     > run_selection_all_partitions
-    > PlotFEL_partition
-    > PlotMEME_partition
+    > PlotFEL
+    > PlotMEME
+    > TableBUSTEDS_MH
+    > TableRELAX
     > TableABSREL_partition
-    > TableBUSTEDS_MH_partition
-    > TableRELAX_partition
     > TableCFEL_partition
-    > MergeFELCSVs
-    > MergeMEMECSVs
     > MergeABSRELCSVs
-    > MergeBUSTEDS_MH_CSVs
-    > MergeRELAXCSVs
     > MergeCFELCSVs
-    > PlotFELMerge
-    > PlotMEMEMerge
     > SelectionOverviewTable
 
 
@@ -376,8 +367,8 @@ rule macse:
     input:
         fasta=lambda wildcards: CODON_FASTA_BY_SEQUENCE[wildcards.sequence],
     output:
-        codons="results/{sequence}/{sequence}.codons.fa",
-        aa="results/{sequence}/{sequence}.aa.fa",
+        codons="results/by_sequence/{sequence}/{sequence}.codons.fa",
+        aa="results/by_sequence/{sequence}/{sequence}.aa.fa",
     log:
         "logs/macse.{sequence}.log",
     resources:
@@ -409,7 +400,7 @@ rule cln:
     input:
         codons=rules.macse.output.codons,
     output:
-        cln="results/{sequence}/{sequence}.codons.cln.fa",
+        cln="results/by_sequence/{sequence}/{sequence}.codons.cln.fa",
     log:
         "logs/cln.{sequence}.log",
     shell:
@@ -422,7 +413,7 @@ rule strike_ambigs_msa:
     input:
         cln=rules.cln.output.cln,
     output:
-        sa="results/{sequence}/{sequence}.SA.codons.cln.fa",
+        sa="results/by_sequence/{sequence}/{sequence}.SA.codons.cln.fa",
     log:
         "logs/strike_ambigs_msa.{sequence}.log",
     shell:
@@ -435,7 +426,7 @@ rule remove_duplicates_msa:
     input:
         sa=rules.strike_ambigs_msa.output.sa,
     output:
-        rd="results/{sequence}/{sequence}.RD.SA.codons.cln.fa",
+        rd="results/by_sequence/{sequence}/{sequence}.RD.SA.codons.cln.fa",
     log:
         "logs/remove_duplicates_msa.{sequence}.log",
     shell:
@@ -448,8 +439,8 @@ rule tn93_cluster:
     input:
         rd=rules.remove_duplicates_msa.output.rd,
     output:
-        cluster_json="results/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.json",
-        cluster_fasta="results/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta",
+        cluster_json="results/by_sequence/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.json",
+        cluster_fasta="results/by_sequence/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta",
     log:
         "logs/tn93_cluster.{sequence}.log",
     params:
@@ -467,19 +458,48 @@ rule tn93_cluster:
         """
 
 
-def _get_msa(wc):
+###############################################################################
+# Test headers -> header map + test list (only used when test_headers exists)
+###############################################################################
+
+
+def _get_msa(wildcards):
     if KEEP_ALL_SEQUENCES:
         return rules.strike_ambigs_msa.output.sa
     else:
         return rules.tn93_cluster.output.cluster_fasta
 
 
+checkpoint check_msa:
+    input:
+        msa=_get_msa,
+        raw_headers=lambda wildcards: TEST_HEADERS_BY_SAMPLE[wildcards.sample] if TEST_HEADERS_BY_SAMPLE.get(wildcards.sample, False) else [],
+    output:
+        map_csv="results/{sample}/{sample}.{sequence}.sequence_header_map.csv",
+        test_txt="results/{sample}/{sample}.{sequence}.test_sequences.txt",
+        filtered_ids="results/{sample}/{sample}.{sequence}.test_sequences.filtered.txt",
+    log:
+        "logs/check_msa.{sample}.{sequence}.log",
+    params:
+        test_headers_arg=lambda wildcards, input: f"--test-headers {input.raw_headers}" if input.raw_headers else "",
+    shell:
+        r"""
+        python {CHECK_MSA_PY} \
+            --msa {input.msa} \
+            {params.test_headers_arg} \
+            --out-map {output.map_csv} \
+            --out-test {output.test_txt} \
+            --out-test-in-msa {output.filtered_ids} \
+            >{log} 2>&1
+        """
+
+
 rule recombination:
     input:
         msa=_get_msa,
     output:
-        gard_json="results/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.GARD.json",
-        bestgard="results/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
+        gard_json="results/by_sequence/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.GARD.json",
+        bestgard="results/by_sequence/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
     log:
         "logs/recombination.{sequence}.log",
     params:
@@ -495,36 +515,7 @@ rule recombination:
         """
 
 
-###############################################################################
-# Labels -> header map + test list (only used when labels CSV exists)
-###############################################################################
 
-rule build_empty_test_list:
-    output:
-        touch("results/{sample}/{sample}.test_sequences.EMPTY.txt"),
-    log:
-        "logs/build_empty_test_list.{sample}.log",
-    run:
-        with open(log[0], "a") as L:
-            L.write(f"Created empty test list for sample {wildcards.sample}\n")
-
-
-rule build_header_map_and_test_list:
-    input:
-        labels=lambda wildcards: TEST_HEADERS_BY_SAMPLE[wildcards.sample],
-    output:
-        map_csv="results/{sample}/{sample}.sequence_header_map.csv",
-        test_txt="results/{sample}/{sample}.test_sequences.txt",
-    log:
-        "logs/build_header_map_and_test_list.{sample}.log",
-    shell:
-        r"""
-        python {CLEAN_TEST_LIST_PY} \
-            --test-headers {input.labels} \
-            --out-map {output.map_csv} \
-            --out-test {output.test_txt} \
-            >{log} 2>&1
-        """
 
 
 ###############################################################################
@@ -537,9 +528,9 @@ checkpoint parse_gard:
         bestgard=rules.recombination.output.bestgard,
         msa=_get_msa,
     output:
-        segflag=touch("results/{sequence}/gard/segments/GARD_parsed.done"),
-        manifest="results/{sequence}/gard/segments.json",
-        log="results/{sequence}/{sequence}.gard.log",
+        segflag=touch("results/by_sequence/{sequence}/gard/segments/GARD_parsed.done"),
+        manifest="results/by_sequence/{sequence}/gard/segments.json",
+        log="results/by_sequence/{sequence}/{sequence}.gard.log",
     params:
         segments_dir=lambda wildcards, output: Path(output["segflag"]).parent,
     run:
@@ -603,44 +594,6 @@ checkpoint parse_gard:
 # Dynamic fan-out utilities (for partitions)
 ###############################################################################
 
-
-# Desired behavior:
-# TODO: FIXTHIS
-# how to get this to only run after test lists are made?
-# if labels weren't provided, then skip RELAX and CFEL
-# if the test list was empty or if there are no test sequences in the alignment, then skip everything.
-def _aggregate_test_results(wc):
-    # By default, run all tests with run=True in tests.csv
-    tests_to_run = tests_df[tests_df["run"]]
-    # First check if sample has labels CSV
-    if LABELS_CSV_BY_SAMPLE.get(wc.sample, False):
-        # get alignment and test IDs
-        ck = checkpoints.parse_gard.get(sequence=SEQUENCE_BY_SAMPLE[wc.sample])
-        with open(ck.output.ids) as fh:
-            alignment_ids = [line.strip() for line in fh]
-        with open(test_list_file(wc.sample)) as fh:
-            test_ids = [line.strip() for line in fh]
-        if not any(sid in alignment_ids for sid in test_ids):
-            # Don't run any tests if there are no test sequences in the alignment
-            return []
-    else:
-        # If no labels CSV, skip tests that require labels (RELAX, CFEL)
-        tests_to_run = tests_to_run[~tests_to_run["requires_labels"]]
-    # Now to format different types of tests based on direct_gard
-    # programs that take direct GARD
-    direct_gard = expand(
-        "results/{{sample}}/tables/{{sample}}.AOC.{program}_Results.csv",
-        program=tests_to_run[tests_to_run["direct_gard"]]["program"].tolist(),
-    )
-    # programs that don't take direct GARD and need to be run on each partition
-    partitioned = expand(
-        "results/{{sample}}/tables/{{sample}}.AOC.merged_{program}_Results.csv",
-        program=tests_to_run[~tests_to_run["direct_gard"]]["program"].tolist(),
-    )
-
-    return direct_gard + partitioned
-
-
 def _parts_for_sample(wildcards):
     ck = checkpoints.parse_gard.get(sequence=SEQUENCE_BY_SAMPLE[wildcards.sample])
     with open(ck.output.manifest) as fh:
@@ -650,22 +603,24 @@ def _parts_for_sample(wildcards):
 
 def _partition_fasta(wildcards):
     sequence = SEQUENCE_BY_SAMPLE[wildcards.sample]
-    return f"results/{sequence}/gard/segments/{sequence}.part{wildcards.part}.codon.fas"
+    return f"results/by_sequence/{sequence}/gard/segments/{sequence}.part{wildcards.part}.codon.fas"
 
 
 ###############################################################################
 # Selection analysis for all partitions (using GARD output)
 ###############################################################################
+
+
 rule label_gard_TestForeground:
     input:
         bestgard=lambda wildcards: expand(
-            "results/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
+            "results/by_sequence/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
             sequence=SEQUENCE_BY_SAMPLE[wildcards.sample],
         ),
-        test_list=_test_list_for_sample,
+        test_list=lambda wildcards: f"results/{{sample}}/{{sample}}.{SEQUENCE_BY_SAMPLE[wildcards.sample]}.test_sequences.txt",
     output:
         labelgard=os.path.join(
-            "results/{sample}/{sample}.RD.SA.codons.cln.fa.cluster.fasta.best-gard.labeled",
+            "results/by_sequence/{sample}/{sample}.RD.SA.codons.cln.fa.cluster.fasta.best-gard.labeled",
             ),
     log:
         "logs/label_gard_TestForeground.{sample}.log",
@@ -673,7 +628,7 @@ rule label_gard_TestForeground:
         logp = log[0] if hasattr(log, "__iter__") else str(log)
         with open(logp, "a") as L:
             L.write("START\n")
-        if (not os.path.exists(input.test_list)) or (
+        if (input.test_list is None) or(not os.path.exists(input.test_list)) or (
             os.path.getsize(input.test_list) == 0
         ):
             shell(f"cp {input.bestgard} {output.labelgard}")
@@ -743,34 +698,14 @@ rule BUSTEDS_MH:
 rule RELAX:
     input:
         aln=rules.label_gard_TestForeground.output.labelgard,
-        test_list=_test_list_for_sample,
     output:
         json="results/{sample}/selection/{sample}.RELAX.json",
     log:
         "logs/RELAX.{sample}.log",
-    run:
-        logp = log[0] if hasattr(log, "__iter__") else str(log)
-        with open(logp, "a") as L:
-            L.write("START\n")
-        if (not os.path.exists(input.test_list)) or (
-            os.path.getsize(input.test_list) == 0
-        ):
-            with open(output.json, "w") as fh:
-                json.dump(
-                    {"skipped": True, "reason": "empty_or_missing_test_list"},
-                    fh,
-                    indent=2,
-                )
-            with open(logp, "a") as L:
-                L.write("Skipped (no test list)\nEND\n")
-        else:
-            shell(
-                f"{HYPHY} RELAX --alignment {input.aln} "
-                f"--output {output.json} --test TEST "
-                f"> {logp} 2>&1"
-            )
-            with open(logp, "a") as L:
-                L.write("END\n")
+    shell:
+        r"""
+        {HYPHY} RELAX --alignment {input.aln} --output {output.json} --test TEST >{log} 2>&1
+        """
 
 
 ###############################################################################
@@ -794,7 +729,7 @@ rule fasttree_partition:
 rule label_tree_TestForeground_partition:
     input:
         tree=rules.fasttree_partition.output.tree,
-        test_list=_test_list_for_sample,
+        test_list=lambda wildcards: f"results/{{sample}}/{{sample}}.{SEQUENCE_BY_SAMPLE[wildcards.sample]}.test_sequences.txt",
     output:
         tree="results/{sample}/selection/part{part}/FastTree.labelled.treefile",
     log:
@@ -802,7 +737,7 @@ rule label_tree_TestForeground_partition:
     run:
         with open(log[0] if hasattr(log, "__iter__") else str(log), "a") as L:
             L.write("START\n")
-        if (not os.path.exists(input.test_list)) or (
+        if (input.test_list is None) or (not os.path.exists(input.test_list)) or (
             os.path.getsize(input.test_list) == 0
         ):
             shell("cp {input.tree} {output.tree}")
@@ -846,34 +781,14 @@ rule CFEL_partition:
     input:
         aln=_partition_fasta,
         tree=rules.label_tree_TestForeground_partition.output.tree,
-        test_list=_test_list_for_sample,
     output:
         json="results/{sample}/selection/part{part}/CFEL.json",
     log:
         "logs/CFEL_partition.{sample}.part{part}.log",
-    run:
-        logp = log[0] if hasattr(log, "__iter__") else str(log)
-        with open(logp, "a") as L:
-            L.write("START\n")
-        if (not os.path.exists(input.test_list)) or (
-            os.path.getsize(input.test_list) == 0
-        ):
-            with open(output.json, "w") as fh:
-                json.dump(
-                    {"skipped": True, "reason": "empty_or_missing_test_list"},
-                    fh,
-                    indent=2,
-                )
-            with open(logp, "a") as L:
-                L.write("Skipped (no test list)\nEND\n")
-        else:
-            shell(
-                f"{HYPHY} contrast-fel --alignment {input.aln} --tree {input.tree} "
-                f"--output {output.json} --branch-set Test "
-                f"> {logp} 2>&1"
-            )
-            with open(logp, "a") as L:
-                L.write("END\n")
+    shell:
+        r"""
+        {HYPHY} contrast-fel --alignment {input.aln} --tree {input.tree} --output {output.json} --branch-set Test >{log} 2>&1
+        """
 
 
 ###############################################################################
@@ -914,7 +829,7 @@ rule run_selection_all_partitions:
 
 rule PlotFEL:
     input:
-        json="results/{sample}/selection/FEL.json"
+        json=rules.FEL.output.json,
     output:
         output_csv="results/{sample}/tables/{sample}.AOC.FEL_Results.csv",
         output_png="results/{sample}/visualizations/{sample}.FEL.png",
@@ -1002,7 +917,7 @@ rule PlotFEL:
 
 rule PlotMEME:
     input:
-        json="results/{sample}/selection/MEME.json",
+        json=rules.MEME.output.json,
     output:
         output_csv="results/{sample}/tables/{sample}.AOC.MEME_Results.csv",
         output_png="results/{sample}/visualizations/{sample}.MEME.png",
@@ -1080,7 +995,7 @@ rule PlotMEME:
 
 rule TableBUSTEDS_MH:
     input:
-        json="results/{sample}/selection/{sample}.BUSTEDS-MH.json",
+        json=rules.BUSTEDS_MH.output.json,
     output:
         csv="results/{sample}/tables/{sample}.AOC.BUSTEDS-MH_Results.csv",
     log:
@@ -1132,7 +1047,7 @@ rule TableBUSTEDS_MH:
 
 rule TableRELAX:
     input:
-        json="results/{sample}/selection/{sample}.RELAX.json",
+        json=rules.RELAX.output.json,
     output:
         csv="results/{sample}/tables/{sample}.AOC.RELAX_Results.csv",
     log:
@@ -1187,7 +1102,7 @@ rule TableRELAX:
 
 rule TableABSREL_partition:
     input:
-        json="results/{sample}/selection/part{part}/ABSREL.json",
+        json=rules.ABSREL_partition.output.json,
     output:
         csv="results/{sample}/tables/part{part}/{sample}.part{part}.AOC.ABSREL_Results.csv",
     log:
@@ -1257,7 +1172,7 @@ rule TableABSREL_partition:
 
 rule TableCFEL_partition:
     input:
-        json="results/{sample}/selection/part{part}/CFEL.json",
+        json=rules.CFEL_partition.output.json,
     output:
         csv="results/{sample}/tables/part{part}/{sample}.part{part}.AOC.CFEL_Results.csv",
     log:
@@ -1362,130 +1277,186 @@ def _overview_inputs_for_sample_all_partitions(wc):
     return outs
 
 
+# Runs once the test list and final MSA are available, and aggregates the test results for a given sample.
+def _aggregate_test_results(wildcards):
+    # By default, run all tests with run=True in tests.csv
+    tests_to_run = tests_df[tests_df["run"]]
+    ck = checkpoints.check_msa.get(sample=wildcards.sample, sequence=SEQUENCE_BY_SAMPLE[wildcards.sample])
+    with open(ck.output.filtered_ids) as filtered_id_fh:
+        # First check if sample has labels CSV
+        if TEST_HEADERS_BY_SAMPLE.get(wildcards.sample, False):
+            # get alignment and test IDs
+            with open(ck.output.filtered_ids) as fh:
+                test_id_count = sum(1 for line in fh)
+                if test_id_count == 0:
+                    # Don't run any tests if there are no test sequences in the alignment
+                    return {"skipped": "results/{sample}/SKIPPED.done"}
+        else:
+            # If no labels CSV, skip tests that require labels (RELAX, CFEL)
+            tests_to_run = tests_to_run[~tests_to_run["requires_labels"]]
+
+        plotted_tests = tests_to_run[tests_to_run["plot"]]["program"].tolist()
+        plotted_test_results = expand(
+            "results/{{sample}}/tables/{{sample}}.AOC.{program}_Results.csv",
+            program=plotted_tests,
+        )
+        plotted_test_dict = dict(zip(plotted_tests, plotted_test_results))
+
+        # get remaining tests
+        tests_to_run = tests_to_run[~tests_to_run["plot"]]
+
+        direct_gard_tests = tests_to_run[tests_to_run["direct_gard"]]["program"].tolist()
+        direct_gard_results = expand(
+            "results/{{sample}}/selection/{{sample}}.{test}.json",
+            test=direct_gard_tests,
+        )
+        direct_gard_dict = dict(zip(direct_gard_tests, direct_gard_results))
+
+        # get remaining partitioned tests
+        partitioned_tests = tests_to_run[~tests_to_run["direct_gard"]]["program"].tolist()
+        partitioned_test_dict = {}
+        for pt in partitioned_tests:
+            partitioned_test_dict[pt] = expand(
+                "results/{{sample}}/selection/part{part}/{test}.json",
+                part=_parts_for_sample(wildcards),
+                test=[pt],
+            )
+        return plotted_test_dict | direct_gard_dict | partitioned_test_dict
+
+
+rule SelectionSkipped:
+    output:
+        touch("results/{sample}/SKIPPED.done"),
+    log:
+        "logs/SelectionSkipped.{sample}.log",
+    run:
+        with open(log[0] if hasattr(log, "__iter__") else str(log), "a") as L:
+            L.write("No test sequences found in alignment\n")    
+
+
 rule SelectionOverviewTable_all_partitions:
     input:
-        expand(
-            "results/{{sample}}/tables/{{sample}}.AOC.{test}_Results.csv",
-            test=["FEL", "MEME"],
-        )
+        unpack(_aggregate_test_results),
     output:
-        csv="results/{sample}/tables/{sample}.selection_overview_all_partitions.csv",
+        csv=touch("results/{sample}/tables/{sample}.selection_overview_all_partitions.csv"),
     log:
         "logs/SelectionOverviewTable.{sample}.log"
     run:
-        rows = []
-        fel = pd.read_csv(input.fel)
-        meme = pd.read_csv(input.meme)
-        if not fel.empty:
-            if "adjusted_p-value" in fel.columns and "Partition" in fel.columns:
-                fel["adjusted_p-value"] = pd.to_numeric(
-                    fel["adjusted_p-value"], errors="coerce"
-                )
-                for part, subdf in fel.groupby("Partition"):
-                    rows.append(
-                        {
-                            "sample": wildcards.sample,
-                            "partition": part,
-                            "method": "FEL",
-                            "metric": "significant_sites_FDR_0.10",
-                            "value": int((subdf["adjusted_p-value"] <= 0.10).sum()),
-                        }
-                    )
-            else:
-                rows.append(
-                    {
-                        "sample": wildcards.sample,
-                        "partition": "all",
-                        "method": "FEL",
-                        "metric": "significant_sites_FDR_0.10",
-                        "value": 0,
-                    }
-                )
-        if not meme.empty:
-            if "adjusted_p-value" in meme.columns and "Partition" in meme.columns:
-                meme["adjusted_p-value"] = pd.to_numeric(
-                    meme["adjusted_p-value"], errors="coerce"
-                )
-                for part, subdf in meme.groupby("Partition"):
-                    rows.append(
-                        {
-                            "sample": wildcards.sample,
-                            "partition": part,
-                            "method": "MEME",
-                            "metric": "significant_sites_FDR_0.10",
-                            "value": int((subdf["adjusted_p-value"] <= 0.10).sum()),
-                        }
-                    )
-            else:
-                rows.append(
-                    {
-                        "sample": wildcards.sample,
-                        "partition": "all",
-                        "method": "MEME",
-                        "metric": "significant_sites_FDR_0.10",
-                        "value": 0,
-                    }
-                )
-        busted_data = _read_json(input.busted)
-        if busted_data.get("skipped"):
-            rows.append(
-                {
-                    "sample": wildcards.sample,
-                    "partition": None,
-                    "method": "BUSTEDS-MH",
-                    "metric": "status",
-                    "value": "skipped",
-                }
-            )
-        else:
-            pval = busted_data.get("test results", {}).get("p-value", None)
-            rows.append(
-                {
-                    "sample": wildcards.sample,
-                    "partition": "All",
-                    "method": "BUSTEDS-MH",
-                    "metric": "gene_wide_pvalue",
-                    "value": pval,
-                }
-            )
-        relax_data = _read_json(input.relax)
-        if relax_data.get("skipped"):
-            rows.append(
-                {
-                    "sample": wildcards.sample,
-                    "partition": None,
-                    "method": "RELAX",
-                    "metric": "status",
-                    "value": "skipped",
-                }
-            )
-        else:
-            tr = relax_data.get("test results", {})
-            rows.append(
-                {
-                    "sample": wildcards.sample,
-                    "partition": "All",
-                    "method": "RELAX",
-                    "metric": "k",
-                    "value": tr.get(
-                        "relaxation or intensification parameter", None
-                    ),
-                }
-            )
-            rows.append(
-                {
-                    "sample": wildcards.sample,
-                    "partition": "All",
-                    "method": "RELAX",
-                    "metric": "pvalue",
-                    "value": tr.get("p-value", None),
-                }
-            )
-        out = pd.DataFrame(
-            rows, columns=["sample", "partition", "method", "metric", "value"]
-        )
-        os.makedirs(os.path.dirname(output.csv), exist_ok=True)
-        out.to_csv(output.csv, index=False)
+        print(input)
+
+        # rows = []
+        # fel = pd.read_csv(input.fel)
+        # meme = pd.read_csv(input.meme)
+        # if not fel.empty:
+        #     if "adjusted_p-value" in fel.columns and "Partition" in fel.columns:
+        #         fel["adjusted_p-value"] = pd.to_numeric(
+        #             fel["adjusted_p-value"], errors="coerce"
+        #         )
+        #         for part, subdf in fel.groupby("Partition"):
+        #             rows.append(
+        #                 {
+        #                     "sample": wildcards.sample,
+        #                     "partition": part,
+        #                     "method": "FEL",
+        #                     "metric": "significant_sites_FDR_0.10",
+        #                     "value": int((subdf["adjusted_p-value"] <= 0.10).sum()),
+        #                 }
+        #             )
+        #     else:
+        #         rows.append(
+        #             {
+        #                 "sample": wildcards.sample,
+        #                 "partition": "all",
+        #                 "method": "FEL",
+        #                 "metric": "significant_sites_FDR_0.10",
+        #                 "value": 0,
+        #             }
+        #         )
+        # if not meme.empty:
+        #     if "adjusted_p-value" in meme.columns and "Partition" in meme.columns:
+        #         meme["adjusted_p-value"] = pd.to_numeric(
+        #             meme["adjusted_p-value"], errors="coerce"
+        #         )
+        #         for part, subdf in meme.groupby("Partition"):
+        #             rows.append(
+        #                 {
+        #                     "sample": wildcards.sample,
+        #                     "partition": part,
+        #                     "method": "MEME",
+        #                     "metric": "significant_sites_FDR_0.10",
+        #                     "value": int((subdf["adjusted_p-value"] <= 0.10).sum()),
+        #                 }
+        #             )
+        #     else:
+        #         rows.append(
+        #             {
+        #                 "sample": wildcards.sample,
+        #                 "partition": "all",
+        #                 "method": "MEME",
+        #                 "metric": "significant_sites_FDR_0.10",
+        #                 "value": 0,
+        #             }
+        #         )
+        # busted_data = _read_json(input.busted)
+        # if busted_data.get("skipped"):
+        #     rows.append(
+        #         {
+        #             "sample": wildcards.sample,
+        #             "partition": None,
+        #             "method": "BUSTEDS-MH",
+        #             "metric": "status",
+        #             "value": "skipped",
+        #         }
+        #     )
+        # else:
+        #     pval = busted_data.get("test results", {}).get("p-value", None)
+        #     rows.append(
+        #         {
+        #             "sample": wildcards.sample,
+        #             "partition": "All",
+        #             "method": "BUSTEDS-MH",
+        #             "metric": "gene_wide_pvalue",
+        #             "value": pval,
+        #         }
+        #     )
+        # relax_data = _read_json(input.relax)
+        # if relax_data.get("skipped"):
+        #     rows.append(
+        #         {
+        #             "sample": wildcards.sample,
+        #             "partition": None,
+        #             "method": "RELAX",
+        #             "metric": "status",
+        #             "value": "skipped",
+        #         }
+        #     )
+        # else:
+        #     tr = relax_data.get("test results", {})
+        #     rows.append(
+        #         {
+        #             "sample": wildcards.sample,
+        #             "partition": "All",
+        #             "method": "RELAX",
+        #             "metric": "k",
+        #             "value": tr.get(
+        #                 "relaxation or intensification parameter", None
+        #             ),
+        #         }
+        #     )
+        #     rows.append(
+        #         {
+        #             "sample": wildcards.sample,
+        #             "partition": "All",
+        #             "method": "RELAX",
+        #             "metric": "pvalue",
+        #             "value": tr.get("p-value", None),
+        #         }
+        #     )
+        # out = pd.DataFrame(
+        #     rows, columns=["sample", "partition", "method", "metric", "value"]
+        # )
+        # os.makedirs(os.path.dirname(output.csv), exist_ok=True)
+        # out.to_csv(output.csv, index=False)
 
 
 # remove

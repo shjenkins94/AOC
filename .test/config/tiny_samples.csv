@@ -1,3 +1,4 @@
 sample,sequence,test_headers
 tiny,BDNF,
 tiny1,BDNF,config/tiny1_test_headers.txt
+tiny2,BDNF,config/tiny2_test_headers.txt
