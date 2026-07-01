@@ -44,6 +44,9 @@ use_mpi: True
 # macse_mem_mb: 65536
 # macse_heap_mb: 57344
 
+# This can be used to add or remove HYPHY tests, but adding new tests is not recommended unless you are familiar with HYPHY and the AOC workflow.
+tests_csv: config/tiny_tests.csv
+
 # External executables
 # Leave these as-is if the tools are available on PATH in the AOC environment.
 # hyphy: hyphy
