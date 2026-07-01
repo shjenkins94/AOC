@@ -62,9 +62,7 @@ LABEL_GARD_BF = config.get(
     "label_gard_bf", workflow.source_path("scripts/label-gard-nexus.bf")
 )
 
-CHECK_MSA_PY = config.get(
-    "check_msa_py", workflow.source_path("scripts/check_msa.py")
-)
+CHECK_MSA_PY = config.get("check_msa_py", workflow.source_path("scripts/check_msa.py"))
 
 TN93_CLUSTER_PY = config.get(
     "tn93_cluster_py", workflow.source_path("scripts/tn93_cluster.py")
@@ -185,9 +183,15 @@ if missing_tests:
     raise ValueError(f"tests.csv missing required columns {sorted(missing_tests)}")
 
 ALL_TESTS = tests_df[tests_df["run"]]["program"].tolist()
-DIRECT_GARD_TESTS = tests_df[(tests_df["run"]) & (tests_df["direct_gard"])]["program"].tolist()
-PARTITIONED_TESTS = tests_df[(tests_df["run"]) & (~tests_df["direct_gard"])]["program"].tolist()
-REQUIRE_LABELS_TESTS = tests_df[(tests_df["run"]) & (tests_df["requires_labels"])]["program"].tolist()
+DIRECT_GARD_TESTS = tests_df[(tests_df["run"]) & (tests_df["direct_gard"])][
+    "program"
+].tolist()
+PARTITIONED_TESTS = tests_df[(tests_df["run"]) & (~tests_df["direct_gard"])][
+    "program"
+].tolist()
+REQUIRE_LABELS_TESTS = tests_df[(tests_df["run"]) & (tests_df["requires_labels"])][
+    "program"
+].tolist()
 PLOTTED_TESTS = tests_df[(tests_df["run"]) & (tests_df["plot"])]["program"].tolist()
 UNPLOTTED_TESTS = tests_df[(tests_df["run"]) & (~tests_df["plot"])]["program"].tolist()
 
@@ -459,7 +463,11 @@ def _get_msa(wildcards):
 checkpoint check_msa:
     input:
         msa=_get_msa,
-        raw_headers=lambda wildcards: TEST_HEADERS_BY_SAMPLE[wildcards.sample] if TEST_HEADERS_BY_SAMPLE.get(wildcards.sample, False) else [],
+        raw_headers=lambda wildcards: (
+            TEST_HEADERS_BY_SAMPLE[wildcards.sample]
+            if TEST_HEADERS_BY_SAMPLE.get(wildcards.sample, False)
+            else []
+        ),
     output:
         map_csv="results/{sample}/{sample}.{sequence}.sequence_header_map.csv",
         test_txt="results/{sample}/{sample}.{sequence}.test_sequences.txt",
@@ -467,7 +475,9 @@ checkpoint check_msa:
     log:
         "logs/check_msa.{sample}.{sequence}.log",
     params:
-        test_headers_arg=lambda wildcards, input: f"--test-headers {input.raw_headers}" if input.raw_headers else "",
+        test_headers_arg=lambda wildcards, input: (
+            f"--test-headers {input.raw_headers}" if input.raw_headers else ""
+        ),
     shell:
         r"""
         python {CHECK_MSA_PY} \
@@ -499,9 +509,6 @@ rule recombination:
         {params.hyphy_command} GARD --alignment {input.msa} --rv GDD --output {output.gard_json} --mode Faster ENV='TOLERATE_NUMERICAL_ERRORS=1;' \
             >{log} 2>&1
         """
-
-
-
 
 
 ###############################################################################
@@ -580,6 +587,7 @@ checkpoint parse_gard:
 # Dynamic fan-out utilities (for partitions)
 ###############################################################################
 
+
 def _parts_for_sample(wildcards):
     ck = checkpoints.parse_gard.get(sequence=SEQUENCE_BY_SAMPLE[wildcards.sample])
     with open(ck.output.manifest) as fh:
@@ -607,15 +615,17 @@ rule label_gard_TestForeground:
     output:
         labelgard=os.path.join(
             "results/by_sequence/{sample}/{sample}.RD.SA.codons.cln.fa.cluster.fasta.best-gard.labeled",
-            ),
+        ),
     log:
         "logs/label_gard_TestForeground.{sample}.log",
     run:
         logp = log[0] if hasattr(log, "__iter__") else str(log)
         with open(logp, "a") as L:
             L.write("START\n")
-        if (input.test_list is None) or(not os.path.exists(input.test_list)) or (
-            os.path.getsize(input.test_list) == 0
+        if (
+            (input.test_list is None)
+            or (not os.path.exists(input.test_list))
+            or (os.path.getsize(input.test_list) == 0)
         ):
             shell(f"cp {input.bestgard} {output.labelgard}")
             with open(logp, "a") as L:
@@ -723,8 +733,10 @@ rule label_tree_TestForeground_partition:
     run:
         with open(log[0] if hasattr(log, "__iter__") else str(log), "a") as L:
             L.write("START\n")
-        if (input.test_list is None) or (not os.path.exists(input.test_list)) or (
-            os.path.getsize(input.test_list) == 0
+        if (
+            (input.test_list is None)
+            or (not os.path.exists(input.test_list))
+            or (os.path.getsize(input.test_list) == 0)
         ):
             shell("cp {input.tree} {output.tree}")
             with open(log[0] if hasattr(log, "__iter__") else str(log), "a") as L:
@@ -1267,7 +1279,9 @@ def _overview_inputs_for_sample_all_partitions(wc):
 def _aggregate_test_results(wildcards):
     # By default, run all tests with run=True in tests.csv
     tests_to_run = tests_df[tests_df["run"]]
-    ck = checkpoints.check_msa.get(sample=wildcards.sample, sequence=SEQUENCE_BY_SAMPLE[wildcards.sample])
+    ck = checkpoints.check_msa.get(
+        sample=wildcards.sample, sequence=SEQUENCE_BY_SAMPLE[wildcards.sample]
+    )
     with open(ck.output.filtered_ids) as filtered_id_fh:
         # First check if sample has labels CSV
         if TEST_HEADERS_BY_SAMPLE.get(wildcards.sample, False):
@@ -1291,7 +1305,9 @@ def _aggregate_test_results(wildcards):
         # get remaining tests
         tests_to_run = tests_to_run[~tests_to_run["plot"]]
 
-        direct_gard_tests = tests_to_run[tests_to_run["direct_gard"]]["program"].tolist()
+        direct_gard_tests = tests_to_run[tests_to_run["direct_gard"]][
+            "program"
+        ].tolist()
         direct_gard_results = expand(
             "results/{{sample}}/selection/{{sample}}.{test}.json",
             test=direct_gard_tests,
@@ -1299,7 +1315,9 @@ def _aggregate_test_results(wildcards):
         direct_gard_dict = dict(zip(direct_gard_tests, direct_gard_results))
 
         # get remaining partitioned tests
-        partitioned_tests = tests_to_run[~tests_to_run["direct_gard"]]["program"].tolist()
+        partitioned_tests = tests_to_run[~tests_to_run["direct_gard"]][
+            "program"
+        ].tolist()
         partitioned_test_dict = {}
         for pt in partitioned_tests:
             partitioned_test_dict[pt] = expand(
@@ -1317,7 +1335,7 @@ rule SelectionSkipped:
         "logs/SelectionSkipped.{sample}.log",
     run:
         with open(log[0] if hasattr(log, "__iter__") else str(log), "a") as L:
-            L.write("No test sequences found in alignment\n")    
+            L.write("No test sequences found in alignment\n")
 
 
 rule SelectionOverviewTable:
@@ -1326,7 +1344,7 @@ rule SelectionOverviewTable:
     output:
         csv="results/{sample}/tables/{sample}.selection_overview.csv",
     log:
-        "logs/SelectionOverviewTable.{sample}.log"
+        "logs/SelectionOverviewTable.{sample}.log",
     run:
         rows = []
         if input.get("skipped"):
@@ -1343,7 +1361,10 @@ rule SelectionOverviewTable:
             if input.get("FEL"):
                 fel = pd.read_csv(input.FEL)
                 if not fel.empty:
-                    if "adjusted_p-value" in fel.columns and "Partition" in fel.columns:
+                    if (
+                        "adjusted_p-value" in fel.columns
+                        and "Partition" in fel.columns
+                    ):
                         fel["adjusted_p-value"] = pd.to_numeric(
                             fel["adjusted_p-value"], errors="coerce"
                         )
@@ -1354,7 +1375,9 @@ rule SelectionOverviewTable:
                                     "partition": part,
                                     "method": "FEL",
                                     "metric": "significant_sites_FDR_0.10",
-                                    "value": int((subdf["adjusted_p-value"] <= 0.10).sum()),
+                                    "value": int(
+                                        (subdf["adjusted_p-value"] <= 0.10).sum()
+                                    ),
                                 }
                             )
                     else:
@@ -1370,7 +1393,10 @@ rule SelectionOverviewTable:
             if input.get("MEME"):
                 meme = pd.read_csv(input.MEME)
                 if not meme.empty:
-                    if "adjusted_p-value" in meme.columns and "Partition" in meme.columns:
+                    if (
+                        "adjusted_p-value" in meme.columns
+                        and "Partition" in meme.columns
+                    ):
                         meme["adjusted_p-value"] = pd.to_numeric(
                             meme["adjusted_p-value"], errors="coerce"
                         )
@@ -1381,7 +1407,9 @@ rule SelectionOverviewTable:
                                     "partition": part,
                                     "method": "MEME",
                                     "metric": "significant_sites_FDR_0.10",
-                                    "value": int((subdf["adjusted_p-value"] <= 0.10).sum()),
+                                    "value": int(
+                                        (subdf["adjusted_p-value"] <= 0.10).sum()
+                                    ),
                                 }
                             )
                     else:
@@ -1456,8 +1484,9 @@ rule SelectionOverviewTable:
                     absrel_data = _read_json(absrel_part)
                     part_match = re.search(r"/part(\d+)/", str(absrel_part))
                     partition = int(part_match.group(1)) if part_match else None
-
-                    branch_attrs = absrel_data.get("branch attributes", {}).get("0", {})
+                    branch_attrs = absrel_data.get("branch attributes", {}).get(
+                        "0", {}
+                    )
                     sig = 0
                     for _, vals in branch_attrs.items():
                         if not isinstance(vals, dict):
@@ -1483,7 +1512,6 @@ rule SelectionOverviewTable:
                     cfel_data = _read_json(cfel_part)
                     part_match = re.search(r"/part(\d+)/", str(cfel_part))
                     partition = int(part_match.group(1)) if part_match else None
-
                     try:
                         headers = [x[0] for x in cfel_data["MLE"]["headers"]]
                         df = pd.DataFrame(
@@ -1494,7 +1522,9 @@ rule SelectionOverviewTable:
                         )
                         sig = (
                             int(
-                                (pd.to_numeric(df[pcol], errors="coerce") <= 0.10).sum()
+                                (
+                                    pd.to_numeric(df[pcol], errors="coerce") <= 0.10
+                                ).sum()
                             )
                             if pcol
                             else 0
@@ -1510,11 +1540,11 @@ rule SelectionOverviewTable:
                             "value": sig,
                         }
                     )
-
         out = pd.DataFrame(
             rows, columns=["sample", "partition", "method", "metric", "value"]
         )
         out.to_csv(output.csv, index=False)
+
 
 ###############################################################################
 # End of file
