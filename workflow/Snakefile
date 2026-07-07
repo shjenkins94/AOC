@@ -200,63 +200,13 @@ SAMPLES_WITH_LABELS_BY_SEQUENCE = {
 }
 
 ###############################################################################
-# Path helpers
+# Utility functions
 ###############################################################################
 
-def sample_dir(sample): return os.path.join(str(OUTROOT), sample)
-def sequence_dir(sequence): return os.path.join(str(OUTROOT), "sequences", sequence)
 
-def test_list_file(sample): return os.path.join(sample_dir(sample), f"{sample}.test_sequences.txt")
-def empty_test_list_file(sample): return os.path.join(sample_dir(sample), f"{sample}.test_sequences.EMPTY.txt")
-def header_map_file(sample): return os.path.join(sample_dir(sample), f"{sample}.sequence_header_map.csv")
-
-def gard_dir(sequence): return os.path.join(sequence_dir(sequence), "gard")
-def gard_segments_dir(sequence): return os.path.join(gard_dir(sequence), "segments")
-def gard_manifest(sequence): return os.path.join(gard_dir(sequence), "segments.json")
-def gard_log(sequence): return os.path.join(sequence_dir(sequence), f"{sequence}.gard.log")
-def codon1_file(sequence): return os.path.join(sequence_dir(sequence), f"{sequence}.1.codon.fas")
-def sequence_tree_dir(sequence): return os.path.join(sequence_dir(sequence), "trees")
-def sequence_tree_part_dir(sequence, part): return os.path.join(sequence_tree_dir(sequence), f"part{part}")
-def fasttree_tree_file(sequence, part): return os.path.join(sequence_tree_part_dir(sequence, part), "FastTree.treefile")
-
-def selection_dir(sample): return os.path.join(sample_dir(sample), "selection")
-def selection_part_dir(sample, part): return os.path.join(selection_dir(sample), f"part{part}")
-
-def log_path(rule_name, sample, part=None):
-    if part is None:
-        return os.path.join(LOGDIR, f"{rule_name}.{sample}.log")
-    return os.path.join(LOGDIR, f"{rule_name}.{sample}.part{part}.log")
-
-def tables_dir(sample): return os.path.join(sample_dir(sample), "tables")
-def viz_dir(sample): return os.path.join(sample_dir(sample), "visualizations")
-def summary_dir(sample): return os.path.join(sample_dir(sample), "summary")
-
-def fel_table(sample, part):
-    return os.path.join(str(OUTROOT), sample, "tables", f"part{part}", f"{sample}.part{part}.AOC.FEL_Results.csv")
-
-def meme_table(sample, part):
-    return os.path.join(str(OUTROOT), sample, "tables", f"part{part}", f"{sample}.part{part}.AOC.MEME_Results.csv")
-
-def absrel_table(sample, part):
-    return os.path.join(str(OUTROOT), sample, "tables", f"part{part}", f"{sample}.part{part}.AOC.ABSREL_Results.csv")
-
-def busted_table(sample, part):
-    return os.path.join(str(OUTROOT), sample, "tables", f"part{part}", f"{sample}.part{part}.AOC.BUSTEDS-MH_Results.csv")
-
-def relax_table(sample, part):
-    return os.path.join(str(OUTROOT), sample, "tables", f"part{part}", f"{sample}.part{part}.AOC.RELAX_Results.csv")
-
-def cfel_table(sample, part):
-    return os.path.join(str(OUTROOT), sample, "tables", f"part{part}", f"{sample}.part{part}.AOC.CFEL_Results.csv")
-
-def fel_plot_png(sample, part): return os.path.join(viz_dir(sample), f"{sample}.part{part}.FEL.png")
-def fel_plot_svg(sample, part): return os.path.join(viz_dir(sample), f"{sample}.part{part}.FEL.svg")
-def fel_legend(sample, part): return os.path.join(viz_dir(sample), f"{sample}.part{part}.FEL.figureLegend")
-def meme_plot_png(sample, part): return os.path.join(viz_dir(sample), f"{sample}.part{part}.MEME.png")
-def meme_plot_svg(sample, part): return os.path.join(viz_dir(sample), f"{sample}.part{part}.MEME.svg")
-def meme_legend(sample, part): return os.path.join(viz_dir(sample), f"{sample}.part{part}.MEME.figureLegend")
-
-def save_altair_with_vl_convert(chart, *, png_path=None, svg_path=None, scale=2, ppi=None):
+def save_altair_with_vl_convert(
+    chart, *, png_path=None, svg_path=None, scale=2, ppi=None
+):
     try:
         import vl_convert as vlc
     except ImportError as e:
@@ -1006,24 +956,6 @@ rule run_selection_all_partitions:
 # - then run the executive summary script (if available)
 ###############################################################################
 
-def _partition_json_glob(sample, test_name):
-    return sorted(glob.glob(os.path.join(selection_dir(sample), "part*", f"{test_name}.json")))
-
-def _plot_fel_inputs_for_sample(wc):
-    return [fel_plot_png(wc.sample, part) for part in _parts_for_sample(wc)]
-
-def _plot_meme_inputs_for_sample(wc):
-    return [meme_plot_png(wc.sample, part) for part in _parts_for_sample(wc)]
-
-def _overview_inputs_for_sample(wc):
-    outs = [
-        os.path.join(str(OUTROOT), wc.sample, "tables", f"{wc.sample}.AOC.merged_FEL_Results.csv"),
-        os.path.join(str(OUTROOT), wc.sample, "tables", f"{wc.sample}.AOC.merged_MEME_Results.csv"),
-    ]
-    for part in _parts_for_sample(wc):
-        for test in ["ABSREL", "BUSTEDS-MH", "RELAX", "CFEL"]:
-            outs.append(os.path.join(selection_part_dir(wc.sample, part), f"{test}.json"))
-    return outs
 
 rule PlotFEL_partition:
     input:
