@@ -2,6 +2,8 @@
 # pixi environments
 .pixi/*
 !.pixi/config.toml
+pixi.lock
+pixi.toml
 .envrc
 # Byte-compiled / optimized / DLL files
 __pycache__/
