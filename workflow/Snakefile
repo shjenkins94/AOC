@@ -307,23 +307,14 @@ def _hyphy_content_table(data):
 # Utility: ensure empty test list exists for unlabeled samples
 ###############################################################################
 
-def _ensure_empty_test_list(sample):
-    p = empty_test_list_file(sample)
-    if not os.path.exists(p):
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-        with open(p, "w") as fh:
-            fh.write("")
-    return p
-
-def _test_list_for_sample(wc):
-    p = test_list_file(wc.sample)
-    if os.path.exists(p):
-        return p
-    return _ensure_empty_test_list(wc.sample)
+def _test_list_for_sample(wildcards):
+    if LABELS_CSV_BY_SAMPLE.get(wildcards.sample, False):
+        return "results/{sample}/{sample}.test_sequences.txt"
+    else:
+        return "results/{sample}/{sample}.test_sequences.EMPTY.txt"
 
 def _branch_arg(sample):
-    p = test_list_file(sample)
-    if os.path.exists(p) and os.path.getsize(p) > 0:
+    if LABELS_CSV_BY_SAMPLE.get(sample, False):
         return "--branches Test"
     return ""
 
@@ -595,6 +586,15 @@ rule recombination:
 ###############################################################################
 # Labels -> header map + test list (only used when labels CSV exists)
 ###############################################################################
+rule build_empty_test_list:
+    output:
+        touch("results/{sample}/{sample}.test_sequences.EMPTY.txt"),
+    log:
+        "logs/build_empty_test_list.{sample}.log",
+    run:
+        with open(log[0], "a") as L:
+            L.write(f"Created empty test list for sample {wildcards.sample}\n")
+
 
 rule build_header_map_and_test_list:
     input:
