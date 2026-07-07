@@ -63,21 +63,32 @@ HYPHY_MPI    = config.get("hyphy_mpi", "HYPHYMPI")
 MPIRUN       = config.get("mpirun", "mpirun")
 FASTTREE     = config.get("fasttree", "FastTree")
 
-REMOVE_DUPS_BF     = config.get("remove_dups_bf", "software/remove-duplicates/remove-duplicates.bf")
-STRIKE_AMBIGS_BF   = config.get("strike_ambigs_bf", "scripts/strike-ambigs.bf")
-LABEL_TREE_BF      = config.get("label_tree_bf", "software/LabelTrees/label-tree.bf")
+REMOVE_DUPS_BF = config.get(
+    "remove_dups_bf",
+    workflow.source_path("software/remove-duplicates/remove-duplicates.bf"),
+)
 
-MAKE_TEST_LIST_PY  = config.get("make_test_list_py", "scripts/make_sequence_header_map.py")
-TN93_CLUSTER_PY    = config.get("tn93_cluster_py", "scripts/tn93_cluster.py")
+STRIKE_AMBIGS_BF = config.get(
+    "strike_ambigs_bf", workflow.source_path("scripts/strike-ambigs.bf")
+)
+LABEL_TREE_BF = config.get(
+    "label_tree_bf", workflow.source_path("software/LabelTrees/label-tree.bf")
+)
 
+MAKE_TEST_LIST_PY = config.get(
+    "make_test_list_py", workflow.source_path("scripts/make_sequence_header_map.py")
+)
+TN93_CLUSTER_PY = config.get(
+    "tn93_cluster_py", workflow.source_path("scripts/tn93_cluster.py")
+)
 GARD_PROCESSORS = int(config.get("gard_processors", 4))
 PRESERVE_TEST_SEQUENCES_RAW = config.get("preserve_test_sequences", False)
 
 # Summarizer scripts (from your Snakefile_SummarizeResults)
 # If these scripts differ in your repo, update paths in config.yaml
-MERGE_FEL_PY  = config.get("merge_fel_py",  "scripts/MergeFELResults.py")
-MERGE_MEME_PY = config.get("merge_meme_py", "scripts/MergeMEMEResults.py")
-EXEC_SUMMARY_PY = config.get("exec_summary_py", "scripts/ExecutiveSummary.py")
+MERGE_FEL_PY = config.get("merge_fel_py", workflow.source_path("scripts/MergeFELResults.py"))
+MERGE_MEME_PY = config.get("merge_meme_py", workflow.source_path("scripts/MergeMEMEResults.py"))
+EXEC_SUMMARY_PY = config.get("exec_summary_py", workflow.source_path("scripts/ExecutiveSummary.py"))
 
 # Logging
 LOGDIR = os.path.join(str(OUTROOT), "logs")
@@ -88,7 +99,9 @@ MACSE_HEAP_FRACTION = float(config.get("macse_heap_fraction", 0.875))
 MACSE_HEAP_RESERVE_MB = int(config.get("macse_heap_reserve_mb", 1024))
 MACSE_MIN_HEAP_MB = int(config.get("macse_min_heap_mb", 2048))
 MACSE_XMS_MB = int(config.get("macse_xms_mb", 512))
-MACSE_RUNNER = config.get("macse_runner", "scripts/run_macse_with_heap.sh")
+MACSE_RUNNER = config.get(
+    "macse_runner", workflow.source_path("scripts/run_macse_with_heap.sh")
+)
 
 def _coerce_bool(value):
     if isinstance(value, bool):
