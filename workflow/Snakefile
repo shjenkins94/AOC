@@ -32,8 +32,7 @@ alt.data_transformers.disable_max_rows()
 
 configfile: "config/config.yaml"
 
-BASEDIR = os.getcwd()
-OUTROOT = Path(config.get("outdir", "results"))
+
 SAMPLES_CSV = config.get("samples_csv", "samples.csv")
 SEQUENCES_CSV = config.get("sequences_csv", "sequences.csv")
 
@@ -69,10 +68,6 @@ PRESERVE_TEST_SEQUENCES_RAW = config.get("preserve_test_sequences", False)
 MERGE_FEL_PY = config.get("merge_fel_py", workflow.source_path("scripts/MergeFELResults.py"))
 MERGE_MEME_PY = config.get("merge_meme_py", workflow.source_path("scripts/MergeMEMEResults.py"))
 EXEC_SUMMARY_PY = config.get("exec_summary_py", workflow.source_path("scripts/ExecutiveSummary.py"))
-
-# Logging
-LOGDIR = os.path.join(str(OUTROOT), "logs")
-os.makedirs(LOGDIR, exist_ok=True)
 
 MACSE_LAUNCHER = config.get("macse_launcher", "macse")
 MACSE_HEAP_FRACTION = float(config.get("macse_heap_fraction", 0.875))
@@ -180,6 +175,9 @@ if missing_sequence_paths:
     raise ValueError(f"No codon_fasta entry found for sequences: {missing_sequence_paths}")
 
 LABELS_CSV_BY_SAMPLE  = dict(zip(samples_df["sample"], samples_df["sequence_labels_csv"].astype(str)))
+LABELS_CSV_BY_SAMPLE = {
+    k: v for k, v in LABELS_CSV_BY_SAMPLE.items() if not _is_missing(v)
+}
 
 def _is_missing(x):
     if x is None:
@@ -192,8 +190,6 @@ def _is_missing(x):
 def sequence_for_sample(sample):
     return SEQUENCE_BY_SAMPLE[sample]
 
-def codon_fasta_path(sequence):
-    return os.path.join(BASEDIR, CODON_FASTA_BY_SEQUENCE[sequence])
 
 def labels_csv_path(sample):
     v = LABELS_CSV_BY_SAMPLE.get(sample, None)
@@ -201,10 +197,8 @@ def labels_csv_path(sample):
         return ""
     return os.path.join(BASEDIR, str(v))
 
-SAMPLES_WITH_LABELS = [
-    s for s in SAMPLES
-    if (not _is_missing(LABELS_CSV_BY_SAMPLE.get(s, None))) and os.path.exists(labels_csv_path(s))
-]
+SAMPLES_WITH_LABELS = list(LABELS_CSV_BY_SAMPLE.keys())
+
 SAMPLES_WITH_LABELS_BY_SEQUENCE = {
     sequence: [s for s in SAMPLES_WITH_LABELS if sequence_for_sample(s) == sequence]
     for sequence in SEQUENCES
