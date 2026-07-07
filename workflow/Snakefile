@@ -191,11 +191,6 @@ def sequence_for_sample(sample):
     return SEQUENCE_BY_SAMPLE[sample]
 
 
-def labels_csv_path(sample):
-    v = LABELS_CSV_BY_SAMPLE.get(sample, None)
-    if _is_missing(v):
-        return ""
-    return os.path.join(BASEDIR, str(v))
 
 SAMPLES_WITH_LABELS = list(LABELS_CSV_BY_SAMPLE.keys())
 
@@ -598,7 +593,7 @@ rule build_empty_test_list:
 
 rule build_header_map_and_test_list:
     input:
-        labels=lambda wc: labels_csv_path(wc.sample)
+        labels=lambda wc: LABELS_CSV_BY_SAMPLE[wc.sample],
     output:
         map_csv="results/sequences/{sequence}/{sequence}.sequence_header_map.csv",
         test_txt="results/sequences/{sequence}/{sequence}.test_sequences.txt",
@@ -609,9 +604,7 @@ rule build_header_map_and_test_list:
         import pandas as pd
         from collections import Counter
 
-        os.makedirs(os.path.join(str(OUTROOT), wildcards.sample), exist_ok=True)
         logp = log[0] if hasattr(log, "__iter__") else str(log)
-        os.makedirs(os.path.dirname(logp), exist_ok=True)
 
         def sanitize_header(h: str) -> str:
             """
@@ -737,8 +730,6 @@ checkpoint parse_gard:
         #codon1="results/sequences/{sequence}/gard/{sequence}.1.codon.fas"
     run:
         # Logging for checkpoint: use output.log (gard.log)
-        os.makedirs(os.path.dirname(output.log), exist_ok=True)
-
         if not os.path.exists(input.bestgard):
             raise FileNotFoundError(f"[ERROR] GARD results file does not exist: {input.bestgard}")
 
@@ -764,8 +755,6 @@ checkpoint parse_gard:
             data_adjusted_coords.append([start, end - remainder])
             carryOver = remainder
 
-        os.makedirs(gard_segments_dir(wildcards.sequence), exist_ok=True)
-
         manifest = {
             "sequence": wildcards.sequence,
             "msa": str(input.msa),
@@ -776,7 +765,7 @@ checkpoint parse_gard:
 
         with open(output.log, "w") as log_file:
             for i, (start, stop) in enumerate(data_adjusted_coords, start=1):
-                out_fa = os.path.join(gard_segments_dir(wildcards.sequence), f"{wildcards.sequence}.part{i}.codon.fas")
+                out_fa = f"{output.segdir}/{wildcards.sequence}.part{i}.codon.fas"
                 with open(out_fa, "w") as out_f:
                     for record in records:
                         partition = record[int(start):int(stop)]
@@ -837,7 +826,6 @@ rule fasttree_partition:
         "logs/fasttree_partition.{sequence}.part{part}.log",
     shell:
         r"""
-        mkdir -p {OUTROOT}/sequences/{wildcards.sequence}/trees/part{wildcards.part}
         {FASTTREE} -nt -gtr {input.aln} > {output.tree} 2> {log}
         """
 
@@ -880,7 +868,6 @@ rule FEL_partition:
         branch_arg=lambda wc: _branch_arg(wc.sample)
     shell:
         r"""
-        mkdir -p {OUTROOT}/{wildcards.sample}/selection/part{wildcards.part}
         {HYPHY} FEL --alignment {input.aln} --tree {input.tree} --output {output.json} --ci Yes {params.branch_arg} > {log} 2>&1
         """
 
@@ -896,7 +883,6 @@ rule MEME_partition:
         branch_arg=lambda wc: _branch_arg(wc.sample),
     shell:
         r"""
-        mkdir -p {OUTROOT}/{wildcards.sample}/selection/part{wildcards.part}
         {HYPHY} MEME --alignment {input.aln} --tree {input.tree} --output {output.json} {params.branch_arg} ENV='TOLERATE_NUMERICAL_ERRORS=1;' > {log} 2>&1
         """
 
@@ -912,7 +898,6 @@ rule ABSREL_partition:
         branch_arg=lambda wc: _branch_arg(wc.sample),
     shell:
         r"""
-        mkdir -p {OUTROOT}/{wildcards.sample}/selection/part{wildcards.part}
         {HYPHY} ABSREL --alignment {input.aln} --tree {input.tree} --output {output.json} {params.branch_arg} > {log} 2>&1
         """
 
@@ -928,7 +913,6 @@ rule BUSTEDS_MH_partition:
         branch_arg=lambda wc: _branch_arg(wc.sample),
     shell:
         r"""
-        mkdir -p {OUTROOT}/{wildcards.sample}/selection/part{wildcards.part}
         {HYPHY} BUSTED \
           --alignment {input.aln} \
           --tree {input.tree} \
@@ -949,7 +933,6 @@ rule RELAX_partition:
     log:
         "logs/RELAX_partition.{sample}.part{part}.log",
     run:
-        os.makedirs(os.path.dirname(output.json), exist_ok=True)
         logp = log[0] if hasattr(log, "__iter__") else str(log)
         with open(logp, "a") as L:
             L.write("START\n")
@@ -977,7 +960,6 @@ rule CFEL_partition:
     log:
         "logs/CFEL_partition.{sample}.part{part}.log",
     run:
-        os.makedirs(os.path.dirname(output.json), exist_ok=True)
         logp = log[0] if hasattr(log, "__iter__") else str(log)
         with open(logp, "a") as L:
             L.write("START\n")
@@ -1065,7 +1047,6 @@ rule PlotFEL_partition:
         df.index += 1
         df["CodonSite"] = df.index
         df["adjusted_p-value"] = _safe_fdrcorrection(df["p-value"].tolist(), alpha=0.10)
-        os.makedirs(os.path.dirname(output.output_csv), exist_ok=True)
         df.to_csv(output.output_csv, index=False)
 
         source = df.copy().dropna().rename(columns={"p-value": "p_value", "adjusted_p-value": "adjusted_p_value"})
@@ -1104,7 +1085,6 @@ rule PlotMEME_partition:
         df.index += 1
         df["CodonSite"] = df.index
         df["adjusted_p-value"] = _safe_fdrcorrection(df["p-value"].tolist(), alpha=0.10)
-        os.makedirs(os.path.dirname(output.output_csv), exist_ok=True)
         df.to_csv(output.output_csv, index=False)
 
         source = df.copy().rename(columns={
@@ -1199,7 +1179,6 @@ rule TableABSREL_partition:
                 })
 
         df = pd.DataFrame(rows)
-        os.makedirs(os.path.dirname(output.csv), exist_ok=True)
         df.to_csv(output.csv, index=False)
 
 
@@ -1256,8 +1235,6 @@ rule TableBUSTEDS_MH_partition:
             })
 
         df = pd.DataFrame(rows)
-
-        os.makedirs(os.path.dirname(output.csv), exist_ok=True)
         df.to_csv(output.csv, index=False)
 
 
@@ -1312,7 +1289,6 @@ rule TableRELAX_partition:
             }]
 
         df = pd.DataFrame(rows)
-        os.makedirs(os.path.dirname(output.csv), exist_ok=True)
         df.to_csv(output.csv, index=False)
 
 
@@ -1348,7 +1324,6 @@ rule TableCFEL_partition:
             else:
                 df["significant_site_0.10"] = 0
 
-        os.makedirs(os.path.dirname(output.csv), exist_ok=True)
         df.to_csv(output.csv, index=False)
 
 
@@ -1375,7 +1350,6 @@ rule MergeFELCSVs:
             df.insert(0, 'Sample', wildcards.sample)
             all_dfs.append(df)
         merged_df = pd.concat(all_dfs, ignore_index=True) if all_dfs else pd.DataFrame(columns=['Sample','Partition'])
-        os.makedirs(os.path.dirname(output.merged_csv), exist_ok=True)
         merged_df.to_csv(output.merged_csv, index=False)
 
 rule MergeMEMECSVs:
@@ -1400,7 +1374,6 @@ rule MergeMEMECSVs:
             df.insert(0, 'Sample', wildcards.sample)
             all_dfs.append(df)
         merged_df = pd.concat(all_dfs, ignore_index=True) if all_dfs else pd.DataFrame(columns=['Sample','Partition'])
-        os.makedirs(os.path.dirname(output.merged_csv), exist_ok=True)
         merged_df.to_csv(output.merged_csv, index=False)
 
 rule MergeABSRELCSVs:
@@ -1417,7 +1390,6 @@ rule MergeABSRELCSVs:
     run:
         dfs = [pd.read_csv(f) for f in input.csvs]
         out = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
-        os.makedirs(os.path.dirname(output.merged_csv), exist_ok=True)
         out.to_csv(output.merged_csv, index=False)
 
 rule MergeBUSTEDS_MH_CSVs:
@@ -1434,7 +1406,6 @@ rule MergeBUSTEDS_MH_CSVs:
     run:
         dfs = [pd.read_csv(f) for f in input.csvs]
         out = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
-        os.makedirs(os.path.dirname(output.merged_csv), exist_ok=True)
         out.to_csv(output.merged_csv, index=False)
 
 rule MergeRELAXCSVs:
@@ -1451,7 +1422,6 @@ rule MergeRELAXCSVs:
     run:
         dfs = [pd.read_csv(f) for f in input.csvs]
         out = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
-        os.makedirs(os.path.dirname(output.merged_csv), exist_ok=True)
         out.to_csv(output.merged_csv, index=False)
 
 rule MergeCFELCSVs:
@@ -1468,7 +1438,6 @@ rule MergeCFELCSVs:
     run:
         dfs = [pd.read_csv(f) for f in input.csvs]
         out = pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
-        os.makedirs(os.path.dirname(output.merged_csv), exist_ok=True)
         out.to_csv(output.merged_csv, index=False)
 
 
@@ -1662,7 +1631,6 @@ rule SelectionOverviewTable:
                 })
 
         out = pd.DataFrame(rows, columns=["sample", "partition", "method", "metric", "value"])
-        os.makedirs(os.path.dirname(output.csv), exist_ok=True)
         out.to_csv(output.csv, index=False)
 
 
@@ -1678,7 +1646,6 @@ rule executive_summary:
     log:
         "logs/executive_summary.{sample}.log"
     run:
-        os.makedirs(os.path.dirname(output.html), exist_ok=True)
         logp = log[0] if hasattr(log, "__iter__") else str(log)
         if os.path.exists(EXEC_SUMMARY_PY):
             shell(
