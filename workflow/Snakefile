@@ -626,10 +626,8 @@ rule build_header_map_and_test_list:
             L.write(f"[INFO] sample={wildcards.sample}\n")
             L.write(f"[INFO] labels={input.labels}\n")
 
-        if (not input.labels) or (str(input.labels).strip() == ""):
+        if str(input.labels).strip() == "":
             raise ValueError(f"[build_header_map_and_test_list] labels path is empty for sample={wildcards.sample}")
-        if not os.path.exists(input.labels):
-            raise FileNotFoundError(f"[build_header_map_and_test_list] labels CSV not found: {input.labels}")
 
         df = pd.read_csv(input.labels)
 
@@ -730,9 +728,6 @@ checkpoint parse_gard:
         #codon1="results/sequences/{sequence}/gard/{sequence}.1.codon.fas"
     run:
         # Logging for checkpoint: use output.log (gard.log)
-        if not os.path.exists(input.bestgard):
-            raise FileNotFoundError(f"[ERROR] GARD results file does not exist: {input.bestgard}")
-
         data = [line.strip() for line in open(input.bestgard) if "CHARSET" in line]
         if not data:
             raise ValueError("[ERROR] GARD results file is empty or improperly formatted (no CHARSET lines).")
@@ -840,7 +835,7 @@ rule label_tree_TestForeground_partition:
     run:
         with open(log[0] if hasattr(log, "__iter__") else str(log), "a") as L:
             L.write("START\n")
-        if (not os.path.exists(input.test_list)) or (os.path.getsize(input.test_list) == 0):
+        if os.path.getsize(input.test_list) == 0:
             shell("cp {input.tree} {output.tree}")
             with open(log[0] if hasattr(log, "__iter__") else str(log), "a") as L:
                 L.write("No test list; copied tree\nEND\n")
@@ -936,7 +931,7 @@ rule RELAX_partition:
         logp = log[0] if hasattr(log, "__iter__") else str(log)
         with open(logp, "a") as L:
             L.write("START\n")
-        if (not os.path.exists(input.test_list)) or (os.path.getsize(input.test_list) == 0):
+        if os.path.getsize(input.test_list) == 0:
             with open(output.json, "w") as fh:
                 json.dump({"skipped": True, "reason": "empty_or_missing_test_list"}, fh, indent=2)
             with open(logp, "a") as L:
@@ -1654,9 +1649,9 @@ rule executive_summary:
                 f"> {logp} 2>&1"
             )
         else:
-            fel = pd.read_csv(input.fel) if os.path.exists(input.fel) else pd.DataFrame()
-            meme = pd.read_csv(input.meme) if os.path.exists(input.meme) else pd.DataFrame()
-            overview = pd.read_csv(input.overview) if os.path.exists(input.overview) else pd.DataFrame()
+            fel = pd.read_csv(input.fel)
+            meme = pd.read_csv(input.meme)
+            overview = pd.read_csv(input.overview)
             fel_sig = int((fel.get("adjusted_p-value", pd.Series(dtype=float)) <= 0.10).sum()) if not fel.empty else 0
             meme_sig = int((meme.get("adjusted_p-value", pd.Series(dtype=float)) <= 0.10).sum()) if not meme.empty else 0
             overview_html = overview.to_html(index=False) if not overview.empty else "<p>No overview metrics available.</p>"
