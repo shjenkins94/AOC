@@ -4,13 +4,13 @@ set -e
 echo "Running AOC installation test..."
 
 # Clean previous test
-rm -rf tests/tmp_output
+rm -rf tests/results
+rm -rf tests/logs
 
 # Run minimal workflow
 snakemake \
   --cores 1 \
-  --snakefile workflow/Snakefile \
-  --config samples_csv=tests/data/tiny_samples.csv outdir=tests/tmp_output
+  --directory tests
 
 # Basic checks
 #if [ ! -f tests/tmp_output/summary/run_manifest.csv ]; then

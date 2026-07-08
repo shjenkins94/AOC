@@ -1,6 +1,6 @@
 import unittest
 
-from scripts.busteds_mh import count_busteds_mh_branches
+from workflow.scripts.busteds_mh import count_busteds_mh_branches
 
 
 class CountBustedsMhBranchesTests(unittest.TestCase):

@@ -16,3 +16,7 @@ workflow/notebooks/.ipynb_checkpoints/**
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+
+# current test files
+tests/results/*
+tests/logs/*

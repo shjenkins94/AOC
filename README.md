@@ -56,9 +56,10 @@ While individual HyPhy analyses can be run through DataMonkey or the HyPhy comma
 AOC/
 ├── workflow/
 │   ├── Snakefile
+│   ├── scripts/
+│   └── software
 ├── config/
 │   └── config.yaml
-├── scripts/
 ├── tests/
 ├── envs/
 │   └── AOC.yaml
