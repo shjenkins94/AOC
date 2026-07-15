@@ -1,0 +1,3 @@
+sample,sequence,sequence_labels_csv
+tiny1,BDNF,data/tiny1_sequence_labels.csv
+tiny2,BDNF,data/tiny2_sequence_labels.csv

@@ -1,0 +1,2 @@
+sample,sequence,codon_fasta,sequence_labels_csv
+tiny1,BDNF,data/empty_sequence_labels.csv
