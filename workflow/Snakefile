@@ -331,6 +331,40 @@ def _assert_preserved_sequences(output_fasta, preserve_names):
 # - selection complete (ALL_PARTITIONS.done)
 # - summarize complete (EXEC_SUMMARY.done)
 ###############################################################################
+localrules: 
+    all, 
+    cln,
+    strike_ambigs_msa, 
+    remove_duplicates_msa, 
+    parse_gard, 
+    build_empty_test_list, 
+    build_header_map_and_test_list, 
+    label_tree_TestForeground_partition, 
+    rebuild_gard_nexus,
+    run_selection_all_partitions,
+    PlotFEL_A,
+    PlotFEL_B,
+    PlotMEME_A,
+    PlotMEME_B,
+    PlotFEL_partition,
+    PlotMEME_partition,
+    TableBUSTEDS_MH,
+    TableRELAX,
+    TableABSREL_partition,
+    TableBUSTEDS_MH_partition,
+    TableRELAX_partition,
+    TableCFEL_partition,
+    MergeFELCSVs,
+    MergeMEMECSVs,
+    MergeABSRELCSVs,
+    MergeBUSTEDS_MH_CSVs,
+    MergeRELAXCSVs,
+    MergeCFELCSVs,
+    PlotFELMerge,
+    PlotMEMEMerge,
+    SelectionOverviewTable_direct,
+    SelectionOverviewTable,
+    executive_summary,
 
 rule all:
     input:
@@ -347,8 +381,7 @@ rule all:
         # expand("results/{sample}/selection/ALL_PARTITIONS.done", sample=SAMPLES),
         # expand("results/{sample}/tables/{sample}.AOC.merged_{test}_Results.csv", sample=SAMPLES, test=["FEL", "MEME", "ABSREL", "BUSTEDS-MH", "RELAX", "CFEL"]),
         # expand("results/{sample}/tables/{sample}.selection_overview.csv", sample=SAMPLES),
-        # expand("results/{sample}/visualizations/{sample}.{test}.merged.png", sample=SAMPLES, test=["FEL", "MEME"]),
-        # expand("results/{sample}/visualizations/{sample}.{test}.png", sample=SAMPLES, test=["FEL", "MEME"]),
+        expand("results/{sample}/visualizations/{sample}.{test}.merged.png", sample=SAMPLES, test=["FEL", "MEME"]),
         # expand("results/{sample}/selection/{test}.json", sample=SAMPLES, test=["FEL", "MEME", "BUSTEDS-MH", "RELAX"]),
         expand("results/{sample}/tables/{sample}.selection_overview_direct.csv", sample=SAMPLES),
         expand("results/{sample}/visualizations/{sample}.{test}.plot_B.png", sample=SAMPLES, test=["FEL", "MEME"]),
@@ -466,8 +499,8 @@ rule recombination:
     input:
         msa=rules.tn93_cluster.output.cluster_fasta
     output:
-        gard_json="results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.GARD.json",
-        bestgard="results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
+        gard_json=protected("results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.GARD.json"),
+        bestgard=protected("results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard"),
     resources:
         tasks=GARD_PROCESSORS,
     log:
@@ -908,7 +941,7 @@ rule BUSTEDS_MH_partition:
         aln=_partition_fasta,
         tree=rules.label_tree_TestForeground_partition.output.tree
     output:
-        json="results/{sample}/selection/part{part}/BUSTEDS-MH.json"
+        json=protected("results/{sample}/selection/part{part}/BUSTEDS-MH.json")
     params:
         branch_arg=lambda wc: _branch_arg(wc.sample)
     log:

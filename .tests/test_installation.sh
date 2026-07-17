@@ -4,15 +4,14 @@ set -e
 echo "Running AOC installation test..."
 
 # Clean previous test
-rm -rf .tests/integration/results
-rm -rf .tests/integration/logs
+# rm -rf .tests/integration/results
+# rm -rf .tests/integration/logs
 
 # Run minimal workflow
 snakemake \
   --cores 10 \
   --directory .tests/integration \
-  --rerun-trigger mtime \
-  --configfile .tests/integration/config/config_mini_legacy.yaml \
+  --configfile .tests/integration/config/config.yaml \
   --config gard_processors=8 
 # Basic checks
 #if [ ! -f tests/tmp_output/summary/run_manifest.csv ]; then

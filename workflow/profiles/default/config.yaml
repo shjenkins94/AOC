@@ -1,0 +1,12 @@
+cores: 10
+jobs: 4
+latency-wait: 60
+keep-going: True
+reason: True
+rerun-incomplete: True
+printshellcmds: True
+default-resources:
+set-resources:
+  recombination:
+    tasks: 8
+    mpi: "mpirun"

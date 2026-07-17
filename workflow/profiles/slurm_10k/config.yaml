@@ -1,0 +1,64 @@
+slurm: True
+jobs: 100
+latency-wait: 60
+keep-going: True
+reason: True
+rerun-incomplete: True
+printshellcmds: True
+config:
+  samples_csv: config/aoc_samples_10k.csv
+default-resources:
+  runtime: 10
+  mem_mb_per_cpu: 2000
+  max_jobs_per_timespan: .1
+  partition: epyc,rome,medium
+set-resources:
+  macse:
+    mem_mb_per_cpu: 32000
+    runtime: 2d
+  recombination:
+    mpi: "mpirun"
+    nodes: 1
+    tasks: 32
+    mem_mb_per_cpu: 500
+    runtime: 2d
+  CFEL_partition:
+    threads: 16
+    mem_mb_per_cpu: 500
+    runtime: 2h
+  ABSREL_partition:
+    threads: 32
+    mem_mb_per_cpu: 500
+    runtime: 8h
+  FEL_direct:
+    threads: 16
+    mem_mb_per_cpu: 500
+    runtime: 90
+  MEME_direct:
+    threads: 16
+    mem_mb_per_cpu: 500
+    runtime: 2h
+  BUSTEDS_MH_direct:
+    threads: 32
+    mem_mb_per_cpu: 500
+    runtime: 3h
+  RELAX_direct:
+    threads: 16
+    mem_mb_per_cpu: 500
+    runtime: 3h
+  FEL_partition:
+    threads: 16
+    mem_mb_per_cpu: 500
+    runtime: 90
+  MEME_partition:
+    threads: 16
+    mem_mb_per_cpu: 500
+    runtime: 2h
+  BUSTEDS_MH_partition:
+    threads: 32
+    mem_mb_per_cpu: 500
+    runtime: 3h
+  RELAX_partition:
+    threads: 16
+    mem_mb_per_cpu: 500
+    runtime: 3h
