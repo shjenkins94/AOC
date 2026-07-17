@@ -1,0 +1,2 @@
+sample,codon_fasta,sequence_labels_csv
+CD2,resources/CD2.fasta,resources/CD2_sequence_labels.csv
