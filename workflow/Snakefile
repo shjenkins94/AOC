@@ -333,6 +333,7 @@ rule all:
         # expand("results/{sample}/tables/{sample}.AOC.merged_{test}_Results.csv", sample=SAMPLES, test=["FEL", "MEME", "ABSREL", "BUSTEDS-MH", "RELAX", "CFEL"]),
         expand("results/{sample}/tables/{sample}.selection_overview.csv", sample=SAMPLES),
         expand("results/{sample}/visualizations/{sample}.{test}.merged.png", sample=SAMPLES, test=["FEL", "MEME"]),
+        expand("results/{sample}/{sample}.SA.codons.cln.fa.labelled.best-gard", sample=SAMPLES),
 
 
 ###############################################################################
@@ -774,6 +775,24 @@ rule label_tree_TestForeground_partition:
             shell(cmd + " > " + (log[0] if hasattr(log, "__iter__") else str(log)) + " 2>&1")
             with open(log[0] if hasattr(log, "__iter__") else str(log), "a") as L:
                 L.write("END\n")
+
+rule rebuild_gard_nexus:
+    input:
+        full_alignment=_full_alignment,
+        trees=lambda wildcards: expand(
+            "results/{{sample}}/selection/part{part}/FastTree.labelled.treefile",
+            part=_parts_for_sample(wildcards),
+        ),
+        bestgard="results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard"
+        template=workflow.source_path("scripts/best-gard.jinja2")
+    output:
+        full_bestgard="results/{sample}/{sample}.SA.codons.cln.fa.labelled.best-gard"
+    log:
+        "logs/rebuild_gard_nexus.{sample}.log"
+    script:
+        "scripts/rebuild_gard_nexus.py"
+
+
 
 rule FEL_partition:
     input:

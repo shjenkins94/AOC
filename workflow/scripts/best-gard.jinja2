@@ -1,0 +1,26 @@
+#NEXUS
+
+BEGIN TAXA;
+	DIMENSIONS NTAX = {{ n_tax }};
+	TAXLABELS
+		{{ tax_labels }} ;
+END;
+
+BEGIN CHARACTERS;
+	DIMENSIONS NCHAR = {{ n_char }};
+	FORMAT
+		DATATYPE = DNA
+		GAP=-
+		MISSING=?
+	;
+
+MATRIX
+{{ msa_matrix }};
+END;
+
+BEGIN ASSUMPTIONS;
+{{ charsets }}END;
+BEGIN TREES;
+{{ trees }}
+END;
+
