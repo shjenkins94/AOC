@@ -4,8 +4,8 @@ set -e
 echo "Running AOC installation test..."
 
 # Clean previous test
-# rm -rf .tests/integration/results
-# rm -rf .tests/integration/logs
+rm -rf .tests/integration/results
+rm -rf .tests/integration/logs
 
 # Run minimal workflow
 snakemake \

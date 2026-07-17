@@ -23,9 +23,11 @@ macse_launcher: macse
 # `preserve_test_sequences` keeps labeled Test sequences during duplicate
 # removal and TN93 clustering, even if this causes the retained alignment to
 # exceed `tn93_max_seqs`.
+# `restore_all_sequences` will restore all the sequences in the original input fasta to the final alignment, even if some were duplicates.
 tn93_threshold: 0.01
 tn93_max_seqs: 20
 preserve_test_sequences: false
+restore_all_sequences: true
 
 # GARD MPI settings
 # `gard_processors` controls the number of MPI ranks used by mpirun for GARD.
