@@ -50,6 +50,7 @@ MACSE_RUNNER = workflow.source_path("scripts/run_macse_with_heap.sh")
 
 GARD_PROCESSORS = int(config.get("gard_processors", 4))
 PRESERVE_TEST_SEQUENCES_RAW = config.get("preserve_test_sequences", False)
+RESTORE_ALL_SEQUENCES_RAW = config.get("restore_all_sequences", False)
 
 # Summarizer scripts (from your Snakefile_SummarizeResults)
 # If these scripts differ in your repo, update paths in config.yaml
@@ -78,6 +79,7 @@ def _coerce_int(value):
         return None
 
 PRESERVE_TEST_SEQUENCES = _coerce_bool(PRESERVE_TEST_SEQUENCES_RAW)
+RESTORE_ALL_SEQUENCES = _coerce_bool(RESTORE_ALL_SEQUENCES_RAW)
 
 def _slurm_mem_mb():
     per_node = _coerce_int(os.environ.get("SLURM_MEM_PER_NODE"))
@@ -226,8 +228,8 @@ def _read_json(path):
 def _hyphy_headers(data):
     return [x[0] for x in data["MLE"]["headers"]]
 
-def _hyphy_content_table(data):
-    return data["MLE"]["content"]["0"]
+def _hyphy_content_table(data, part="0"):
+    return data["MLE"]["content"][str(part)]
 
 ###############################################################################
 # Utility: ensure empty test list exists for unlabeled samples
@@ -250,9 +252,21 @@ def _test_list_for_sample(wc):
     else:
         return _ensure_empty_test_list(wc.sample)
 
+def _alignment_to_restore(sequence):
+    if RESTORE_ALL_SEQUENCES:
+        return f"results/sequences/{sequence}/{sequence}.SA.codons.cln.fa"
+    else:
+        return f"results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa"
+
 def _branch_arg(sample):
     if LABELS_CSV_BY_SAMPLE.get(sample, False):
         return "--branches Test"
+    return ""
+
+# Seems like nexus files get imported with all-uppercase labels, so use TEST
+def _branch_arg_direct(sample):
+    if LABELS_CSV_BY_SAMPLE.get(sample, False):
+        return "--branches TEST"
     return ""
 
 def _preserve_test_list_input(wc):
@@ -329,11 +343,15 @@ rule all:
         # expand("results/{sample}/{sample}.test_sequences.txt", sample=SAMPLES_WITH_LABELS),
         # expand("results/{sample}/{sample}.sequence_header_map.csv", sample=SAMPLES_WITH_LABELS),
         # expand("results/sequences/{sequence}/gard/segments.json", sequence=SEQUENCES),
+        # expand("results/{sample}/{sample}.SA.codons.cln.fa.labelled.best-gard", sample=SAMPLES),
         # expand("results/{sample}/selection/ALL_PARTITIONS.done", sample=SAMPLES),
         # expand("results/{sample}/tables/{sample}.AOC.merged_{test}_Results.csv", sample=SAMPLES, test=["FEL", "MEME", "ABSREL", "BUSTEDS-MH", "RELAX", "CFEL"]),
-        expand("results/{sample}/tables/{sample}.selection_overview.csv", sample=SAMPLES),
-        expand("results/{sample}/visualizations/{sample}.{test}.merged.png", sample=SAMPLES, test=["FEL", "MEME"]),
-        expand("results/{sample}/{sample}.SA.codons.cln.fa.labelled.best-gard", sample=SAMPLES),
+        # expand("results/{sample}/tables/{sample}.selection_overview.csv", sample=SAMPLES),
+        # expand("results/{sample}/visualizations/{sample}.{test}.merged.png", sample=SAMPLES, test=["FEL", "MEME"]),
+        # expand("results/{sample}/visualizations/{sample}.{test}.png", sample=SAMPLES, test=["FEL", "MEME"]),
+        # expand("results/{sample}/selection/{test}.json", sample=SAMPLES, test=["FEL", "MEME", "BUSTEDS-MH", "RELAX"]),
+        expand("results/{sample}/tables/{sample}.selection_overview_direct.csv", sample=SAMPLES),
+        expand("results/{sample}/visualizations/{sample}.{test}.plot_B.png", sample=SAMPLES, test=["FEL", "MEME"]),
 
 
 ###############################################################################
@@ -634,7 +652,7 @@ rule build_header_map_and_test_list:
 checkpoint parse_gard:
     input:
         bestgard=rules.recombination.output.bestgard,
-        msa=rules.remove_duplicates_msa.output.rd
+        msa=lambda wildcards: _alignment_to_restore(wildcards.sequence) 
     output:
         manifest="results/sequences/{sequence}/gard/segments.json",
         segdir=directory("results/sequences/{sequence}/gard/segments"),
@@ -778,12 +796,12 @@ rule label_tree_TestForeground_partition:
 
 rule rebuild_gard_nexus:
     input:
-        full_alignment=_full_alignment,
+        full_alignment=lambda wildcards: _alignment_to_restore(SEQUENCE_BY_SAMPLE[wildcards.sample]),
         trees=lambda wildcards: expand(
             "results/{{sample}}/selection/part{part}/FastTree.labelled.treefile",
             part=_parts_for_sample(wildcards),
         ),
-        bestgard="results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard"
+        bestgard=lambda wildcards: expand("results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard", sequence=SEQUENCE_BY_SAMPLE[wildcards.sample]),
         template=workflow.source_path("scripts/best-gard.jinja2")
     output:
         full_bestgard="results/{sample}/{sample}.SA.codons.cln.fa.labelled.best-gard"
@@ -792,6 +810,81 @@ rule rebuild_gard_nexus:
     script:
         "scripts/rebuild_gard_nexus.py"
 
+
+rule FEL_direct:
+    input:
+        aln=rules.rebuild_gard_nexus.output.full_bestgard,
+    output:
+        json="results/{sample}/selection/FEL.json"
+    params:
+        branch_arg=lambda wc: _branch_arg_direct(wc.sample)
+    log:
+        "logs/FEL_direct.{sample}.log"
+    shell:
+        r"""
+        {HYPHY} FEL --alignment {input.aln} --output {output.json} --ci Yes {params.branch_arg} > {log} 2>&1
+        """
+
+
+rule MEME_direct:
+    input:
+        aln=rules.rebuild_gard_nexus.output.full_bestgard,
+    output:
+        json="results/{sample}/selection/MEME.json"
+    params:
+        branch_arg=lambda wc: _branch_arg_direct(wc.sample)
+    log:
+        "logs/MEME_direct.{sample}.log"
+    shell:
+        r"""
+        {HYPHY} MEME --alignment {input.aln} --output {output.json} {params.branch_arg} ENV='TOLERATE_NUMERICAL_ERRORS=1;' > {log} 2>&1
+        """
+
+rule BUSTEDS_MH_direct:
+    input:
+        aln=rules.rebuild_gard_nexus.output.full_bestgard,
+    output:
+        json="results/{sample}/selection/BUSTEDS-MH.json"
+    params:
+        branch_arg=lambda wc: _branch_arg_direct(wc.sample)
+    log:
+        "logs/BUSTEDS_MH_direct.{sample}.log"
+    shell:
+        r"""
+        {HYPHY} BUSTED \
+          --alignment {input.aln} \
+          --output {output.json} \
+          --srv Yes \
+          --multiple-hits Double+Triple \
+          {params.branch_arg} \
+          > {log} 2>&1
+        """
+
+rule RELAX_direct:
+    input:
+        aln=rules.rebuild_gard_nexus.output.full_bestgard,
+        test_list=_test_list_for_sample
+    output:
+        json="results/{sample}/selection/RELAX.json"
+    log:
+        "logs/RELAX_direct.{sample}.log"
+    run:
+        logp = log[0] if hasattr(log, "__iter__") else str(log)
+        with open(logp, "a") as L:
+            L.write("START\n")
+        if (not os.path.exists(input.test_list)) or (os.path.getsize(input.test_list) == 0):
+            with open(output.json, "w") as fh:
+                json.dump({"skipped": True, "reason": "empty_or_missing_test_list"}, fh, indent=2)
+            with open(logp, "a") as L:
+                L.write("Skipped (no test list)\nEND\n")
+        else:
+            shell(
+                f"{HYPHY} RELAX --alignment {input.aln} "
+                f"--output {output.json} --test TEST --reference Background "
+                f"> {logp} 2>&1"
+            )
+            with open(logp, "a") as L:
+                L.write("END\n")
 
 
 rule FEL_partition:
@@ -948,6 +1041,166 @@ rule run_selection_all_partitions:
 # - then run the executive summary script (if available)
 ###############################################################################
 
+rule PlotFELA:
+    input:
+        json=rules.FEL_direct.output.json
+    output:
+        output_csv="results/{sample}/tables/{sample}.AOC.FEL_Results.csv",
+        output_png="results/{sample}/visualizations/{sample}.FEL.plot_A.png",
+        output_svg="results/{sample}/visualizations/{sample}.FEL.plot_A.svg",
+        output_figureLegend="results/{sample}/visualizations/{sample}.FEL.figure_legend.txt"
+    log:
+        "logs/PlotFELA.{sample}.log"
+    run:
+        data = _read_json(input.json)
+        headers = _hyphy_headers(data)
+        all_dfs = []
+        for part in data["MLE"]["content"]:
+            df = pd.DataFrame(
+                _hyphy_content_table(data, part), columns=headers, dtype=float
+            )
+            df.insert(0, "Partition", int(part) + 1)
+            df.insert(0, "Sample", wildcards.sample)
+            all_dfs.append(df)
+        merged_df = (
+            pd.concat(all_dfs, ignore_index=True)
+            if all_dfs
+            else pd.DataFrame(columns=["Sample", "Partition"])
+        )
+        merged_df.index += 1
+        merged_df["CodonSite"] = merged_df.index
+        merged_df["adjusted_p-value"] = _safe_fdrcorrection(
+            merged_df["p-value"].tolist(), alpha=0.10
+        )
+        merged_df.to_csv(output.output_csv, index=False)
+        source = (
+            merged_df.copy()
+            .dropna()
+            .rename(
+                columns={
+                    "p-value": "p_value",
+                    "adjusted_p-value": "adjusted_p_value",
+                }
+            )
+        )
+        line = (
+            alt.Chart(source)
+            .mark_circle(clip=True, opacity=0.9, size=70)
+            .encode(
+                x=alt.X("CodonSite:Q", title="Codon site"),
+                y=alt.Y(
+                    "dN/dS MLE:Q",
+                    title="dN/dS estimate",
+                    scale=alt.Scale(
+                        domain=(0, 5), clamp=True, nice=False, type="sqrt"
+                    ),
+                ),
+                color=alt.condition(
+                    "datum.adjusted_p_value <= 0.1",
+                    alt.value("red"),
+                    alt.value("lightgray"),
+                ),
+                tooltip=[
+                    "CodonSite",
+                    "alpha",
+                    "beta",
+                    "dN/dS MLE",
+                    "p_value",
+                    "adjusted_p_value",
+                ],
+            )
+            .properties(width=900, height=450, title=f"FEL: {wildcards.sample}")
+        )
+        band = (
+            alt.Chart(source)
+            .mark_area(opacity=0.25)
+            .encode(x="CodonSite:Q", y="dN/dS LB:Q", y2="dN/dS UB:Q")
+        )
+        chart = band + line
+        save_altair_with_vl_convert(
+            chart, svg_path=output.output_svg, png_path=output.output_png, scale=2
+        )
+        sig = merged_df[merged_df["adjusted_p-value"] <= 0.10]
+        pos = sig[sig["dN/dS MLE"] > 1.0]
+        neg = sig[sig["dN/dS MLE"] < 1.0]
+        with open(output.output_figureLegend, "w") as fh:
+            fh.write(
+                f"FEL identified {len(sig)} significant codon sites in {wildcards.sample} at FDR <= 0.10, including {len(pos)} sites with dN/dS > 1 and {len(neg)} sites with dN/dS < 1.\n"
+            )
+
+
+rule PlotMEMEA:
+    input:
+        json=rules.MEME_direct.output.json,
+    output:
+        output_csv="results/{sample}/tables/{sample}.AOC.MEME_Results.csv",
+        output_png="results/{sample}/visualizations/{sample}.MEME.plot_A.png",
+        output_svg="results/{sample}/visualizations/{sample}.MEME.plot_A.svg",
+        output_figureLegend="results/{sample}/visualizations/{sample}.MEME.figure_legend.txt",
+    log:
+        "logs/PlotMEME.{sample}.log",
+    run:
+        data = _read_json(input.json)
+        headers = _hyphy_headers(data)
+        all_dfs = []
+        for part in data["MLE"]["content"]:
+            df = pd.DataFrame(
+                _hyphy_content_table(data, part), columns=headers, dtype=float
+            )
+            df.insert(0, "Partition", int(part) + 1)
+            df.insert(0, "Sample", wildcards.sample)
+            all_dfs.append(df)
+        merged_df = (
+            pd.concat(all_dfs, ignore_index=True)
+            if all_dfs
+            else pd.DataFrame(columns=["Sample", "Partition"])
+        )
+        merged_df.index += 1
+        merged_df["CodonSite"] = merged_df.index
+        merged_df["adjusted_p-value"] = _safe_fdrcorrection(
+            merged_df["p-value"].tolist(), alpha=0.10
+        )
+        merged_df.to_csv(output.output_csv, index=False)
+        source = merged_df.copy().rename(
+            columns={
+                "p-value": "p_value",
+                "adjusted_p-value": "adjusted_p_value",
+                "beta+": "beta_plus",
+            }
+        )
+        tooltip_fields = [alt.Tooltip("CodonSite:Q", title="Codon site")]
+        if "alpha" in source.columns:
+            tooltip_fields.append(alt.Tooltip("alpha:Q", title="alpha"))
+        if "beta_plus" in source.columns:
+            tooltip_fields.append(alt.Tooltip("beta_plus:Q", title="beta+"))
+        if "p_value" in source.columns:
+            tooltip_fields.append(alt.Tooltip("p_value:Q", title="p-value"))
+        tooltip_fields.append(
+            alt.Tooltip("adjusted_p_value:Q", title="adjusted p-value")
+        )
+        chart = (
+            alt.Chart(source)
+            .mark_point(size=55)
+            .encode(
+                x=alt.X("CodonSite:Q", title="Codon site"),
+                y=alt.Y("adjusted_p_value:Q", title="Adjusted p-value"),
+                color=alt.Color(
+                    "adjusted_p_value:Q",
+                    scale=alt.Scale(scheme="reds", reverse=True),
+                ),
+                tooltip=tooltip_fields,
+            )
+            .properties(width=900, height=450, title=f"MEME: {wildcards.sample}")
+        )
+        save_altair_with_vl_convert(
+            chart, svg_path=output.output_svg, png_path=output.output_png, scale=2
+        )
+        sig = merged_df[merged_df["adjusted_p-value"] <= 0.10]
+        with open(output.output_figureLegend, "w") as fh:
+            fh.write(
+                f"MEME identified {len(sig)} significant codon sites in {wildcards.sample} at FDR <= 0.10, consistent with episodic selection along a subset of branches.\n"
+            )
+
 
 rule PlotFEL_partition:
     input:
@@ -1047,6 +1300,113 @@ rule PlotMEME_partition:
 ###############################################################################
 # Additional selection-analysis tables
 ###############################################################################
+rule TableBUSTEDS_MH:
+    input:
+        json=rules.BUSTEDS_MH_direct.output.json
+    output:
+        csv="results/{sample}/tables/{sample}.AOC.BUSTEDS-MH_Results.csv",
+    log:
+        "logs/TableBUSTEDS_MH.{sample}.log",
+    run:
+        data = _read_json(input.json)
+        rows = []
+        if data.get("skipped"):
+            rows.append(
+                {
+                    "Sample": wildcards.sample,
+                    "Partition": None,
+                    "test": "BUSTEDS-MH",
+                    "p_value": None,
+                    "LRT": None,
+                    "tested_branches": None,
+                    "background_branches": None,
+                    "status": "skipped",
+                }
+            )
+        else:
+            # -------------------------------
+            # test results
+            # -------------------------------
+            tr = data.get("test results", {})
+            pval = tr.get("p-value", None)
+            lrt = tr.get("LRT", None)
+            # -------------------------------
+            # tested/background branches
+            # structure differs across HyPhy versions
+            # -------------------------------
+            branch_counts = _count_branches(data)
+            rows.append(
+                {
+                    "Sample": wildcards.sample,
+                    "Partition": int(wildcards.part),
+                    "test": "BUSTEDS-MH",
+                    "p_value": pval,
+                    "LRT": lrt,
+                    "tested_branches": branch_counts["tested"],
+                    "background_branches": branch_counts["background"],
+                    "status": "ok",
+                }
+            )
+        df = pd.DataFrame(rows)
+        os.makedirs(os.path.dirname(output.csv), exist_ok=True)
+        df.to_csv(output.csv, index=False)
+
+
+rule TableRELAX:
+    input:
+        json=rules.RELAX_direct.output.json,
+    output:
+        csv="results/{sample}/tables/{sample}.AOC.RELAX_Results.csv",
+    log:
+        "logs/TableRELAX.{sample}.log",
+    run:
+        data = _read_json(input.json)
+        rows = []
+        if data.get("skipped"):
+            rows.append(
+                {
+                    "Sample": wildcards.sample,
+                    "Partition": None,
+                    "test": "RELAX",
+                    "k": None,
+                    "p_value": None,
+                    "LRT": None,
+                    "selection_shift": None,
+                    "status": "skipped",
+                }
+            )
+        else:
+            tr = data.get("test results", {})
+            k = tr.get("relaxation or intensification parameter", None)
+            try:
+                k_num = float(k)
+            except (TypeError, ValueError):
+                k_num = None
+            if k_num is None:
+                shift = None
+            elif k_num > 1:
+                shift = "intensified"
+            elif k_num < 1:
+                shift = "relaxed"
+            else:
+                shift = "no_change"
+            rows = [
+                {
+                    "Sample": wildcards.sample,
+                    "Partition": int(wildcards.part),
+                    "test": "RELAX",
+                    "k": k,
+                    "p_value": tr.get("p-value", None),
+                    "LRT": tr.get("LRT", None),
+                    "selection_shift": shift,
+                    "status": "ok",
+                }
+            ]
+        df = pd.DataFrame(rows)
+        os.makedirs(os.path.dirname(output.csv), exist_ok=True)
+        df.to_csv(output.csv, index=False)
+
+
 
 rule TableABSREL_partition:
     input:
@@ -1353,6 +1713,54 @@ rule MergeCFELCSVs:
         out.to_csv(output.merged_csv, index=False)
 
 
+rule PlotFELB:
+    input:
+        csv=rules.PlotFELA.output.output_csv
+    output:
+        output_png="results/{sample}/visualizations/{sample}.FEL.plot_B.png",
+        output_svg="results/{sample}/visualizations/{sample}.FEL.plot_B.svg"
+    log:
+        "logs/PlotFELB.{sample}.log"
+    run:
+        df = pd.read_csv(input.csv)
+        if df.empty:
+            chart = alt.Chart(pd.DataFrame({"message": ["No FEL results"]})).mark_text(size=18).encode(text="message:N")
+        else:
+            source = df.dropna(subset=["CodonSite", "dN/dS MLE"]).copy().rename(columns={"adjusted_p-value": "adjusted_p_value"})
+            chart = alt.Chart(source).mark_circle(size=55, opacity=0.8).encode(
+                x=alt.X("CodonSite:Q", title="Codon site"),
+                y=alt.Y("dN/dS MLE:Q", title="dN/dS estimate", scale=alt.Scale(domain=(0, 5), clamp=True, nice=False, type="sqrt")),
+                color=alt.condition("datum.adjusted_p_value <= 0.1", alt.value("red"), alt.value("lightgray")),
+                column=alt.Column("Partition:O", title="Partition"),
+                tooltip=["Partition", "CodonSite", "dN/dS MLE", "p-value", "adjusted_p_value"]
+            ).properties(width=220, height=320, title=f"Merged FEL profile: {wildcards.sample}")
+        save_altair_with_vl_convert(chart, svg_path=output.output_svg, png_path=output.output_png, scale=2)
+
+
+rule PlotMEMEB:
+    input:
+        csv=rules.PlotMEMEA.output.output_csv
+    output:
+        output_png="results/{sample}/visualizations/{sample}.MEME.plot_B.png",
+        output_svg="results/{sample}/visualizations/{sample}.MEME.plot_B.svg"
+    log:
+        "logs/PlotMEMEB.{sample}.log"
+    run:
+        df = pd.read_csv(input.csv)
+        if df.empty:
+            chart = alt.Chart(pd.DataFrame({"message": ["No MEME results"]})).mark_text(size=18).encode(text="message:N")
+        else:
+            source = df.dropna(subset=["CodonSite"]).copy().rename(columns={"adjusted_p-value": "adjusted_p_value"})
+            chart = alt.Chart(source).mark_point(size=45).encode(
+                x=alt.X("CodonSite:Q", title="Codon site"),
+                y=alt.Y("adjusted_p_value:Q", title="Adjusted p-value"),
+                color=alt.Color("adjusted_p_value:Q", scale=alt.Scale(scheme="reds", reverse=True)),
+                column=alt.Column("Partition:O", title="Partition"),
+                tooltip=["Partition", "CodonSite", "p-value", "adjusted_p_value"]
+            ).properties(width=220, height=320, title=f"Merged MEME profile: {wildcards.sample}")
+        save_altair_with_vl_convert(chart, svg_path=output.output_svg, png_path=output.output_png, scale=2)
+
+
 rule PlotFELMerge:
     input:
         merged_csv=rules.MergeFELCSVs.output.merged_csv
@@ -1398,6 +1806,186 @@ rule PlotMEMEMerge:
                 tooltip=["Partition", "CodonSite", "p-value", "adjusted_p_value"]
             ).properties(width=220, height=320, title=f"Merged MEME profile: {wildcards.sample}")
         save_altair_with_vl_convert(chart, svg_path=output.output_svg, png_path=output.output_png, scale=2)
+
+
+rule SelectionOverviewTable_direct:
+    input:
+        fel=rules.PlotFELA.output.output_csv,
+        meme=rules.PlotMEMEA.output.output_csv,
+        busted=rules.BUSTEDS_MH_direct.output.json,
+        relax=rules.RELAX_direct.output.json,
+        absrel=lambda wildcards: expand(
+            "results/{{sample}}/selection/part{part}/ABSREL.json",
+            part=_parts_for_sample(wildcards),
+        ),
+        cfel=lambda wildcards: expand(
+            "results/{{sample}}/selection/part{part}/CFEL.json",
+            part=_parts_for_sample(wildcards),
+        )
+    output:
+        csv="results/{sample}/tables/{sample}.selection_overview_direct.csv"
+    log:
+        "logs/SelectionOverviewTable_direct.{sample}.log"
+    run:
+        rows = []
+
+        fel = pd.read_csv(input.fel)
+        meme = pd.read_csv(input.meme)
+
+        if not fel.empty:
+            if "adjusted_p-value" in fel.columns and "Partition" in fel.columns:
+                fel["adjusted_p-value"] = pd.to_numeric(fel["adjusted_p-value"], errors="coerce")
+                for part, subdf in fel.groupby("Partition"):
+                    rows.append({
+                        "sample": wildcards.sample,
+                        "partition": part,
+                        "method": "FEL",
+                        "metric": "significant_sites_FDR_0.10",
+                        "value": int((subdf["adjusted_p-value"] <= 0.10).sum())
+                    })
+            else:
+                rows.append({
+                    "sample": wildcards.sample,
+                    "partition": "all",
+                    "method": "FEL",
+                    "metric": "significant_sites_FDR_0.10",
+                    "value": 0
+                })
+
+        if not meme.empty:
+            if "adjusted_p-value" in meme.columns and "Partition" in meme.columns:
+                meme["adjusted_p-value"] = pd.to_numeric(meme["adjusted_p-value"], errors="coerce")
+                for part, subdf in meme.groupby("Partition"):
+                    rows.append({
+                        "sample": wildcards.sample,
+                        "partition": part,
+                        "method": "MEME",
+                        "metric": "significant_sites_FDR_0.10",
+                        "value": int((subdf["adjusted_p-value"] <= 0.10).sum())
+                    })
+            else:
+                rows.append({
+                    "sample": wildcards.sample,
+                    "partition": "all",
+                    "method": "MEME",
+                    "metric": "significant_sites_FDR_0.10",
+                    "value": 0
+                })
+
+        busted_data = _read_json(input.busted)
+        if busted_data.get("skipped"):
+            rows.append({
+                "sample": wildcards.sample,
+                "partition": None,
+                "method": "BUSTEDS-MH",
+                "metric": "status",
+                "value": "skipped"
+            })
+        else:
+            pval = busted_data.get("test results", {}).get("p-value", None)
+            rows.append({
+                "sample": wildcards.sample,
+                "partition": "All",
+                "method": "BUSTEDS-MH",
+                "metric": "gene_wide_pvalue",
+                "value": pval
+            })
+
+        relax_data = _read_json(input.relax)
+
+        if relax_data.get("skipped"):
+            rows.append({
+                "sample": wildcards.sample,
+                "partition": None,
+                "method": "RELAX",
+                "metric": "status",
+                "value": "skipped"
+            })
+        else:
+            tr = relax_data.get("test results", {})
+            rows.append({
+                "sample": wildcards.sample,
+                "partition": "All",
+                "method": "RELAX",
+                "metric": "k",
+                "value": tr.get("relaxation or intensification parameter", None)
+            })
+            rows.append({
+                "sample": wildcards.sample,
+                "partition": "All",
+                "method": "RELAX",
+                "metric": "pvalue",
+                "value": tr.get("p-value", None)
+            })
+        for absrel_path in input.absrel:
+            data = _read_json(absrel_path)
+
+            part_match = re.search(r"/part(\d+)/", str(absrel_path))
+            partition = int(part_match.group(1)) if part_match else None
+
+            if data.get("skipped"):
+                rows.append({
+                    "sample": wildcards.sample,
+                    "partition": partition,
+                    "method": "ABSREL",
+                    "metric": "status",
+                    "value": "skipped"
+                })
+                continue
+            
+            branch_attrs = data.get("branch attributes", {}).get("0", {})
+            sig = 0
+            for _, vals in branch_attrs.items():
+                if not isinstance(vals, dict):
+                    continue
+                cp = vals.get("Corrected P-value", 1.0)
+                try:
+                    cp = float(cp)
+                except (TypeError, ValueError):
+                    cp = 1.0
+                if cp <= 0.10:
+                    sig += 1
+            rows.append({
+                "sample": wildcards.sample,
+                "partition": partition,
+                "method": "ABSREL",
+                "metric": "significant_branches",
+                "value": sig
+            })
+        for cfel_path in input.cfel:
+            data = _read_json(cfel_path)
+
+            part_match = re.search(r"/part(\d+)/", str(cfel_path))
+            partition = int(part_match.group(1)) if part_match else None
+
+            if data.get("skipped"):
+                rows.append({
+                    "sample": wildcards.sample,
+                    "partition": partition,
+                    "method": "CFEL",
+                    "metric": "status",
+                    "value": "skipped"
+                })
+                continue
+            try:
+                headers = [x[0] for x in data["MLE"]["headers"]]
+                df = pd.DataFrame(data["MLE"]["content"]["0"], columns=headers)
+                pcol = next((c for c in headers if "p-value" in c.lower()), None)
+                sig = int((pd.to_numeric(df[pcol], errors="coerce") <= 0.10).sum()) if pcol else 0
+            except Exception:
+                sig = 0
+            rows.append({
+                "sample": wildcards.sample,
+                "partition": partition,
+                "method": "CFEL",
+                "metric": "significant_sites_p_0.10",
+                "value": sig
+            })
+
+        out = pd.DataFrame(rows, columns=["sample", "partition", "method", "metric", "value"])
+        os.makedirs(os.path.dirname(output.csv), exist_ok=True)
+        out.to_csv(output.csv, index=False)
+
 
 rule SelectionOverviewTable:
     input:
