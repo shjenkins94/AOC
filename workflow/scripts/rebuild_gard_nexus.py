@@ -80,7 +80,7 @@ def main():
     """Main Snakemake process."""
     logging.info("Starting main process")
 
-    data = prepare_alignment_data(full_alignment_file=snakemake.input.full_alignment[0])
+    data = prepare_alignment_data(full_alignment_file=snakemake.input.full_alignment)
 
     data["charsets"] = extract_charset_lines(
         original_nexus_file=snakemake.input.bestgard[0]

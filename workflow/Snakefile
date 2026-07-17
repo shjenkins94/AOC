@@ -250,7 +250,7 @@ def _test_list_for_sample(wc):
     if LABELS_CSV_BY_SAMPLE.get(wc.sample, False):
         return f"results/{wc.sample}/{wc.sample}.test_sequences.txt"
     else:
-        return f"results/{sample}/{sample}.test_sequences.EMPTY.txt"
+        return f"results/{wc.sample}/{wc.sample}.test_sequences.EMPTY.txt"
 
 def _alignment_to_restore(sequence):
     if RESTORE_ALL_SEQUENCES:
@@ -357,41 +357,6 @@ rule all:
 ###############################################################################
 # Preprocessing
 ###############################################################################
-
-ruleorder:
-    macse >
-    cln >
-    strike_ambigs_msa >
-    remove_duplicates_msa >
-    tn93_cluster >
-    recombination >
-    build_header_map_and_test_list >
-    parse_gard >
-    fasttree_partition >
-    label_tree_TestForeground_partition >
-    FEL_partition >
-    MEME_partition >
-    ABSREL_partition >
-    BUSTEDS_MH_partition >
-    RELAX_partition >
-    CFEL_partition >
-    run_selection_all_partitions >
-    PlotFEL_partition >
-    PlotMEME_partition >
-    TableABSREL_partition >
-    TableBUSTEDS_MH_partition >
-    TableRELAX_partition >
-    TableCFEL_partition >
-    MergeFELCSVs >
-    MergeMEMECSVs >
-    MergeABSRELCSVs >
-    MergeBUSTEDS_MH_CSVs >
-    MergeRELAXCSVs >
-    MergeCFELCSVs >
-    PlotFELMerge >
-    PlotMEMEMerge >
-    SelectionOverviewTable >
-    executive_summary
 
 rule macse:
     input:
@@ -1051,7 +1016,7 @@ rule run_selection_all_partitions:
 # - then run the executive summary script (if available)
 ###############################################################################
 
-rule PlotFELA:
+rule PlotFEL_A:
     input:
         json=rules.FEL_direct.output.json
     output:
@@ -1060,7 +1025,7 @@ rule PlotFELA:
         output_svg="results/{sample}/visualizations/{sample}.FEL.plot_A.svg",
         output_figureLegend="results/{sample}/visualizations/{sample}.FEL.figure_legend.txt"
     log:
-        "logs/PlotFELA.{sample}.log"
+        "logs/PlotFEL_A.{sample}.log"
     run:
         data = _read_json(input.json)
         headers = _hyphy_headers(data)
@@ -1139,7 +1104,7 @@ rule PlotFELA:
             )
 
 
-rule PlotMEMEA:
+rule PlotMEME_A:
     input:
         json=rules.MEME_direct.output.json,
     output:
@@ -1723,14 +1688,14 @@ rule MergeCFELCSVs:
         out.to_csv(output.merged_csv, index=False)
 
 
-rule PlotFELB:
+rule PlotFEL_B:
     input:
-        csv=rules.PlotFELA.output.output_csv
+        csv=rules.PlotFEL_A.output.output_csv
     output:
         output_png="results/{sample}/visualizations/{sample}.FEL.plot_B.png",
         output_svg="results/{sample}/visualizations/{sample}.FEL.plot_B.svg"
     log:
-        "logs/PlotFELB.{sample}.log"
+        "logs/PlotFEL_B.{sample}.log"
     run:
         df = pd.read_csv(input.csv)
         if df.empty:
@@ -1747,14 +1712,14 @@ rule PlotFELB:
         save_altair_with_vl_convert(chart, svg_path=output.output_svg, png_path=output.output_png, scale=2)
 
 
-rule PlotMEMEB:
+rule PlotMEME_B:
     input:
-        csv=rules.PlotMEMEA.output.output_csv
+        csv=rules.PlotMEME_A.output.output_csv
     output:
         output_png="results/{sample}/visualizations/{sample}.MEME.plot_B.png",
         output_svg="results/{sample}/visualizations/{sample}.MEME.plot_B.svg"
     log:
-        "logs/PlotMEMEB.{sample}.log"
+        "logs/PlotMEME_B.{sample}.log"
     run:
         df = pd.read_csv(input.csv)
         if df.empty:
@@ -1820,8 +1785,8 @@ rule PlotMEMEMerge:
 
 rule SelectionOverviewTable_direct:
     input:
-        fel=rules.PlotFELA.output.output_csv,
-        meme=rules.PlotMEMEA.output.output_csv,
+        fel=rules.PlotFEL_A.output.output_csv,
+        meme=rules.PlotMEME_A.output.output_csv,
         busted=rules.BUSTEDS_MH_direct.output.json,
         relax=rules.RELAX_direct.output.json,
         absrel=lambda wildcards: expand(
