@@ -78,6 +78,14 @@ def _coerce_int(value):
     except (TypeError, ValueError, AttributeError):
         return None
 
+def _is_missing(x):
+    if x is None:
+        return True
+    if isinstance(x, float) and math.isnan(x):
+        return True
+    s = str(x).strip()
+    return (s == "") or (s.lower() == "nan")
+
 PRESERVE_TEST_SEQUENCES = _coerce_bool(PRESERVE_TEST_SEQUENCES_RAW)
 RESTORE_ALL_SEQUENCES = _coerce_bool(RESTORE_ALL_SEQUENCES_RAW)
 
@@ -110,14 +118,6 @@ def _macse_heap_mb():
     heap_after_reserve = requested - MACSE_HEAP_RESERVE_MB
     usable = min(heap_from_fraction, heap_after_reserve) if heap_after_reserve > 0 else heap_from_fraction
     return max(baseline, min(requested, usable))
-
-def _is_missing(x):
-    if x is None:
-        return True
-    if isinstance(x, float) and math.isnan(x):
-        return True
-    s = str(x).strip()
-    return (s == "") or (s.lower() == "nan")
 
 ###############################################################################
 # Read samples.csv
@@ -250,7 +250,7 @@ def _test_list_for_sample(wc):
     if LABELS_CSV_BY_SAMPLE.get(wc.sample, False):
         return f"results/{wc.sample}/{wc.sample}.test_sequences.txt"
     else:
-        return _ensure_empty_test_list(wc.sample)
+        return f"results/{sample}/{sample}.test_sequences.EMPTY.txt"
 
 def _alignment_to_restore(sequence):
     if RESTORE_ALL_SEQUENCES:
@@ -520,6 +520,16 @@ rule recombination:
 ###############################################################################
 # Labels -> header map + test list (only used when labels CSV exists)
 ###############################################################################
+
+rule build_empty_test_list:
+    output:
+        touch("results/{sample}/{sample}.test_sequences.EMPTY.txt"),
+    log:
+        "logs/build_empty_test_list.{sample}.log",
+    run:
+        with open(log[0], "a") as L:
+            L.write(f"Created empty test list for sample {wildcards.sample}\n")
+
 
 rule build_header_map_and_test_list:
     input:
