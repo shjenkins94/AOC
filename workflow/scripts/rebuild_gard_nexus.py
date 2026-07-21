@@ -57,7 +57,7 @@ def format_tree_lines(tree_files):
 
     tree_lines = []
     for index, tree in enumerate(trees):
-        tree_lines.append(f"\tTREE tree_{index + 1} = {tree}")
+        tree_lines.append(f"\tTREE tree_{index + 1} = {tree};")
 
     tree_lines_str = "\n".join(tree_lines)
     logging.info(f"Tree lines:\n{tree_lines_str}")
