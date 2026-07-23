@@ -933,7 +933,7 @@ rule ABSREL_partition:
         "logs/ABSREL_partition.{sample}.part{part}.log"
     shell:
         r"""
-        {HYPHY} ABSREL --alignment {input.aln} --tree {input.tree} --output {output.json} {params.branch_arg} > {log} 2>&1
+        {HYPHY} ABSREL --alignment {input.aln} --tree {input.tree} --output {output.json} {params.branch_arg} ENV='TOLERATE_NUMERICAL_ERRORS=1;' > {log} 2>&1
         """
 
 rule BUSTEDS_MH_partition:

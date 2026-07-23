@@ -21,7 +21,7 @@ set-resources:
     nodes: 1
     tasks: 4
     mem_mb_per_cpu: 500
-    runtime: 1h
+    runtime: 2h
   CFEL_partition:
     threads: 8
     runtime: 20
@@ -36,10 +36,10 @@ set-resources:
     runtime: 25
   BUSTEDS_MH_direct:
     threads: 8
-    runtime: 1h
+    runtime: 2h
   RELAX_direct:
     threads: 8
-    runtime: 35
+    runtime: 1h
   FEL_partition:
     threads: 8
     runtime: 20
@@ -48,7 +48,7 @@ set-resources:
     runtime: 25
   BUSTEDS_MH_partition:
     threads: 8
-    runtime: 35
+    runtime: 2h
   RELAX_partition:
     threads: 8
     runtime: 35
