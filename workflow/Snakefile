@@ -381,7 +381,7 @@ rule all:
         # expand("results/{sample}/selection/ALL_PARTITIONS.done", sample=SAMPLES),
         # expand("results/{sample}/tables/{sample}.AOC.merged_{test}_Results.csv", sample=SAMPLES, test=["FEL", "MEME", "ABSREL", "BUSTEDS-MH", "RELAX", "CFEL"]),
         # expand("results/{sample}/tables/{sample}.selection_overview.csv", sample=SAMPLES),
-        expand("results/{sample}/visualizations/{sample}.{test}.merged.png", sample=SAMPLES, test=["FEL", "MEME"]),
+        # expand("results/{sample}/visualizations/{sample}.{test}.merged.png", sample=SAMPLES, test=["FEL", "MEME"]),
         # expand("results/{sample}/selection/{test}.json", sample=SAMPLES, test=["FEL", "MEME", "BUSTEDS-MH", "RELAX"]),
         expand("results/{sample}/tables/{sample}.selection_overview_direct.csv", sample=SAMPLES),
         expand("results/{sample}/visualizations/{sample}.{test}.plot_B.png", sample=SAMPLES, test=["FEL", "MEME"]),

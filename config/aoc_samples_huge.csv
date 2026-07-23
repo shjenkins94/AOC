@@ -1,4 +1,1 @@
 sample,sequence,sequence_labels_csv
-clicking_ENSG00000179532,ENSG00000179532,resources/sample_labels/clicking_labels.csv
-all_clicking_ENSG00000179532,ENSG00000179532,resources/sample_labels/all_clicking_labels.csv
-all_echo_ENSG00000175820,ENSG00000175820,resources/sample_labels/all_echo_labels.csv
