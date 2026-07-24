@@ -41,11 +41,11 @@ set-resources:
   BUSTEDS_MH_direct:
     threads: 16
     mem_mb_per_cpu: 500
-    runtime: 90
+    runtime: 4h
   RELAX_direct:
     threads: 16
     mem_mb_per_cpu: 500
-    runtime: 90
+    runtime: 2h
   FEL_partition:
     threads: 16
     mem_mb_per_cpu: 500
@@ -57,7 +57,7 @@ set-resources:
   BUSTEDS_MH_partition:
     threads: 16
     mem_mb_per_cpu: 500
-    runtime: 90
+    runtime: 4h
   RELAX_partition:
     threads: 16
     mem_mb_per_cpu: 500
