@@ -21,7 +21,7 @@ set-resources:
     nodes: 1
     tasks: 16
     mem_mb_per_cpu: 500
-    runtime: 4h
+    runtime: 8h
   CFEL_partition:
     threads: 16
     mem_mb_per_cpu: 500
