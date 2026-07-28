@@ -382,9 +382,8 @@ rule all:
         # expand("results/{sample}/tables/{sample}.AOC.merged_{test}_Results.csv", sample=SAMPLES, test=["FEL", "MEME", "ABSREL", "BUSTEDS-MH", "RELAX", "CFEL"]),
         # expand("results/{sample}/tables/{sample}.selection_overview.csv", sample=SAMPLES),
         # expand("results/{sample}/visualizations/{sample}.{test}.merged.png", sample=SAMPLES, test=["FEL", "MEME"]),
-        expand("results/{sample}/selection/{test}.json", sample=SAMPLES, test=["MEME2", "RELAX2"]),
-        # expand("results/{sample}/tables/{sample}.selection_overview_direct.csv", sample=SAMPLES),
-        # expand("results/{sample}/visualizations/{sample}.{test}.plot_B.png", sample=SAMPLES, test=["FEL", "MEME"]),
+        expand("results/{sample}/tables/{sample}.selection_overview_direct.csv", sample=SAMPLES),
+        expand("results/{sample}/visualizations/{sample}.{test}.plot_B.png", sample=SAMPLES, test=["FEL", "MEME"]),
 
 
 ###############################################################################
@@ -873,10 +872,23 @@ rule RELAX_direct2:
     log:
         "logs/RELAX_direct2.{sample}.log"
     conda: "envs/hyphy.yaml"
-    shell:
-        r"""
-        {HYPHY} RELAX --alignment {input.aln} --output {output.json} --test TEST --reference Background > {log} 2>&1
-        """
+    run:
+        logp = log[0] if hasattr(log, "__iter__") else str(log)
+        with open(logp, "a") as L:
+            L.write("START\n")
+        if (not os.path.exists(input.test_list)) or (os.path.getsize(input.test_list) == 0):
+            with open(output.json, "w") as fh:
+                json.dump({"skipped": True, "reason": "empty_or_missing_test_list"}, fh, indent=2)
+            with open(logp, "a") as L:
+                L.write("Skipped (no test list)\nEND\n")
+        else:
+            shell(
+                f"{HYPHY} RELAX --alignment {input.aln} "
+                f"--output {output.json} --test TEST --reference Background "
+                f"> {logp} 2>&1"
+            )
+            with open(logp, "a") as L:
+                L.write("END\n")
 
 
 rule MEME_direct2:

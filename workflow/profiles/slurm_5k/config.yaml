@@ -40,17 +40,8 @@ set-resources:
     runtime: 1h
   BUSTEDS_MH_direct:
     threads: 16
-    mem_mb_per_cpu: 1000
     runtime: 4h
   RELAX_direct:
-    threads: 16
-    mem_mb_per_cpu: 500
-    runtime: 2h
-  MEME_direct2:
-    threads: 16
-    mem_mb_per_cpu: 500
-    runtime: 1h
-  RELAX_direct2:
     threads: 16
     mem_mb_per_cpu: 500
     runtime: 2h
