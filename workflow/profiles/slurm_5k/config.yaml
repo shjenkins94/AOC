@@ -6,7 +6,7 @@ reason: True
 rerun-incomplete: True
 printshellcmds: True
 config:
-  samples_csv: config/bad_mr_samples.csv
+  samples_csv: config/aoc_samples_5k.csv
 default-resources:
   runtime: 10
   mem_mb_per_cpu: 2000
@@ -60,4 +60,4 @@ set-resources:
   RELAX_partition:
     threads: 16
     mem_mb_per_cpu: 500
-    runtime: 90
+    runtime: 2h
