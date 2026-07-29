@@ -1623,7 +1623,6 @@ rule TableCFEL_partition:
 
 rule MergeFELCSVs:
     input:
-        all_done="results/{sample}/selection/ALL_PARTITIONS.done",
         fel_csvs=lambda wildcards: expand(
             "results/{{sample}}/tables/part{part}/{{sample}}.part{part}.AOC.FEL_Results.csv",
             part=_parts_for_sample(wildcards),
@@ -1639,7 +1638,6 @@ rule MergeFELCSVs:
 
 rule MergeMEMECSVs:
     input:
-        all_done="results/{sample}/selection/ALL_PARTITIONS.done",
         meme_csvs=lambda wildcards: expand(
             "results/{{sample}}/tables/part{part}/{{sample}}.part{part}.AOC.MEME_Results.csv",
             part=_parts_for_sample(wildcards),
