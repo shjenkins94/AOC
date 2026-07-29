@@ -55,7 +55,6 @@ set-resources:
     runtime: 60
   BUSTEDS_MH_partition:
     threads: 16
-    mem_mb_per_cpu: 500
     runtime: 4h
   RELAX_partition:
     threads: 16
