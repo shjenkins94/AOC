@@ -1813,7 +1813,7 @@ rule PlotMEMEMerge:
 
 rule SelectionOverviewTable_direct:
     input:
-        fel=rules.PlotFEL_A.output.output_csv,
+        # fel=rules.PlotFEL_A.output.output_csv,
         meme=rules.PlotMEME_A.output.output_csv,
         busted=rules.BUSTEDS_MH_direct.output.json,
         relax=rules.RELAX_direct.output.json,
@@ -1821,10 +1821,10 @@ rule SelectionOverviewTable_direct:
             "results/{{sample}}/selection/part{part}/ABSREL.json",
             part=_parts_for_sample(wildcards),
         ),
-        cfel=lambda wildcards: expand(
-            "results/{{sample}}/selection/part{part}/CFEL.json",
-            part=_parts_for_sample(wildcards),
-        )
+        # cfel=lambda wildcards: expand(
+        #     "results/{{sample}}/selection/part{part}/CFEL.json",
+        #     part=_parts_for_sample(wildcards),
+        # )
     output:
         csv="results/{sample}/tables/{sample}.selection_overview_direct.csv"
     log:
@@ -1832,28 +1832,28 @@ rule SelectionOverviewTable_direct:
     run:
         rows = []
 
-        fel = pd.read_csv(input.fel)
+        # fel = pd.read_csv(input.fel)
         meme = pd.read_csv(input.meme)
 
-        if not fel.empty:
-            if "adjusted_p-value" in fel.columns and "Partition" in fel.columns:
-                fel["adjusted_p-value"] = pd.to_numeric(fel["adjusted_p-value"], errors="coerce")
-                for part, subdf in fel.groupby("Partition"):
-                    rows.append({
-                        "sample": wildcards.sample,
-                        "partition": part,
-                        "method": "FEL",
-                        "metric": "significant_sites_FDR_0.10",
-                        "value": int((subdf["adjusted_p-value"] <= 0.10).sum())
-                    })
-            else:
-                rows.append({
-                    "sample": wildcards.sample,
-                    "partition": "all",
-                    "method": "FEL",
-                    "metric": "significant_sites_FDR_0.10",
-                    "value": 0
-                })
+        # if not fel.empty:
+        #     if "adjusted_p-value" in fel.columns and "Partition" in fel.columns:
+        #         fel["adjusted_p-value"] = pd.to_numeric(fel["adjusted_p-value"], errors="coerce")
+        #         for part, subdf in fel.groupby("Partition"):
+        #             rows.append({
+        #                 "sample": wildcards.sample,
+        #                 "partition": part,
+        #                 "method": "FEL",
+        #                 "metric": "significant_sites_FDR_0.10",
+        #                 "value": int((subdf["adjusted_p-value"] <= 0.10).sum())
+        #             })
+        #     else:
+        #         rows.append({
+        #             "sample": wildcards.sample,
+        #             "partition": "all",
+        #             "method": "FEL",
+        #             "metric": "significant_sites_FDR_0.10",
+        #             "value": 0
+        #         })
 
         if not meme.empty:
             if "adjusted_p-value" in meme.columns and "Partition" in meme.columns:
@@ -1955,35 +1955,35 @@ rule SelectionOverviewTable_direct:
                 "metric": "significant_branches",
                 "value": sig
             })
-        for cfel_path in input.cfel:
-            data = _read_json(cfel_path)
+        # for cfel_path in input.cfel:
+        #     data = _read_json(cfel_path)
 
-            part_match = re.search(r"/part(\d+)/", str(cfel_path))
-            partition = int(part_match.group(1)) if part_match else None
+        #     part_match = re.search(r"/part(\d+)/", str(cfel_path))
+        #     partition = int(part_match.group(1)) if part_match else None
 
-            if data.get("skipped"):
-                rows.append({
-                    "sample": wildcards.sample,
-                    "partition": partition,
-                    "method": "CFEL",
-                    "metric": "status",
-                    "value": "skipped"
-                })
-                continue
-            try:
-                headers = [x[0] for x in data["MLE"]["headers"]]
-                df = pd.DataFrame(data["MLE"]["content"]["0"], columns=headers)
-                pcol = next((c for c in headers if "p-value" in c.lower()), None)
-                sig = int((pd.to_numeric(df[pcol], errors="coerce") <= 0.10).sum()) if pcol else 0
-            except Exception:
-                sig = 0
-            rows.append({
-                "sample": wildcards.sample,
-                "partition": partition,
-                "method": "CFEL",
-                "metric": "significant_sites_p_0.10",
-                "value": sig
-            })
+        #     if data.get("skipped"):
+        #         rows.append({
+        #             "sample": wildcards.sample,
+        #             "partition": partition,
+        #             "method": "CFEL",
+        #             "metric": "status",
+        #             "value": "skipped"
+        #         })
+        #         continue
+        #     try:
+        #         headers = [x[0] for x in data["MLE"]["headers"]]
+        #         df = pd.DataFrame(data["MLE"]["content"]["0"], columns=headers)
+        #         pcol = next((c for c in headers if "p-value" in c.lower()), None)
+        #         sig = int((pd.to_numeric(df[pcol], errors="coerce") <= 0.10).sum()) if pcol else 0
+        #     except Exception:
+        #         sig = 0
+        #     rows.append({
+        #         "sample": wildcards.sample,
+        #         "partition": partition,
+        #         "method": "CFEL",
+        #         "metric": "significant_sites_p_0.10",
+        #         "value": sig
+        #     })
 
         out = pd.DataFrame(rows, columns=["sample", "partition", "method", "metric", "value"])
         os.makedirs(os.path.dirname(output.csv), exist_ok=True)
