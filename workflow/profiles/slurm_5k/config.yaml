@@ -40,7 +40,7 @@ set-resources:
     runtime: 1h
   BUSTEDS_MH_direct:
     threads: 16
-    runtime: 4h
+    runtime: 6h
   RELAX_direct:
     threads: 16
     mem_mb_per_cpu: 500
