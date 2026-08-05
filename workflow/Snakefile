@@ -1343,7 +1343,7 @@ rule TableBUSTEDS_MH:
             # tested/background branches
             # structure differs across HyPhy versions
             # -------------------------------
-            branch_counts = _count_branches(data)
+            branch_counts = count_busteds_mh_branches(data)
             rows.append(
                 {
                     "Sample": wildcards.sample,
