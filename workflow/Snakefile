@@ -1657,7 +1657,6 @@ rule MergeMEMECSVs:
 
 rule MergeABSRELCSVs:
     input:
-        all_done="results/{sample}/selection/ALL_PARTITIONS.done",
         csvs=lambda wildcards: expand(
             "results/{{sample}}/tables/part{part}/{{sample}}.part{part}.AOC.ABSREL_Results.csv",
             part=_parts_for_sample(wildcards),

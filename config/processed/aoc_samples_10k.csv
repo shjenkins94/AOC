@@ -1,0 +1,11 @@
+sample,sequence,sequence_labels_csv
+open_ENSG00000244731,ENSG00000244731,resources/sample_labels/open_labels.csv
+edge_ENSG00000136002,ENSG00000136002,resources/sample_labels/edge_labels.csv
+aerial_ENSG00000136002,ENSG00000136002,resources/sample_labels/aerial_labels.csv
+gleaning_ENSG00000117724,ENSG00000117724,resources/sample_labels/gleaning_labels.csv
+gleaning_ENSG00000160111,ENSG00000160111,resources/sample_labels/gleaning_labels.csv
+passive_active_gleaning_ENSG00000117724,ENSG00000117724,resources/sample_labels/passive_active_gleaning_labels.csv
+all_ENSG00000244731,ENSG00000244731,
+all_ENSG00000136002,ENSG00000136002,
+all_ENSG00000117724,ENSG00000117724,
+all_ENSG00000160111,ENSG00000160111,
