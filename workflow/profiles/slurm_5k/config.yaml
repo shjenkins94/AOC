@@ -44,7 +44,7 @@ set-resources:
   RELAX_direct:
     threads: 16
     mem_mb_per_cpu: 500
-    runtime: 2h
+    runtime: 4h
   FEL_partition:
     threads: 16
     mem_mb_per_cpu: 500
