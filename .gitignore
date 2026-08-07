@@ -18,3 +18,7 @@ workflow/notebooks/.ipynb_checkpoints/**
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
+
+# Error files that pop up sometimes
+errors.log
+errors.log.mpinode0

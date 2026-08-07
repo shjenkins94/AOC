@@ -1343,7 +1343,7 @@ rule TableBUSTEDS_MH:
             # tested/background branches
             # structure differs across HyPhy versions
             # -------------------------------
-            branch_counts = count_busteds_mh_branches(data)
+            tested_branches, background_branches = count_busteds_mh_branches(data)
             rows.append(
                 {
                     "Sample": wildcards.sample,
@@ -1351,8 +1351,8 @@ rule TableBUSTEDS_MH:
                     "test": "BUSTEDS-MH",
                     "p_value": pval,
                     "LRT": lrt,
-                    "tested_branches": branch_counts["tested"],
-                    "background_branches": branch_counts["background"],
+                    "tested_branches": tested_branches,
+                    "background_branches": background_branches,
                     "status": "ok",
                 }
             )
