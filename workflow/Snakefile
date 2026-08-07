@@ -1347,7 +1347,7 @@ rule TableBUSTEDS_MH:
             rows.append(
                 {
                     "Sample": wildcards.sample,
-                    "Partition": int(wildcards.part),
+                    "Partition": "All",
                     "test": "BUSTEDS-MH",
                     "p_value": pval,
                     "LRT": lrt,
@@ -1402,7 +1402,7 @@ rule TableRELAX:
             rows = [
                 {
                     "Sample": wildcards.sample,
-                    "Partition": int(wildcards.part),
+                    "Partition": "All",
                     "test": "RELAX",
                     "k": k,
                     "p_value": tr.get("p-value", None),
