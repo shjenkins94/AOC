@@ -37,13 +37,13 @@ set-resources:
   MEME_direct:
     threads: 16
     mem_mb_per_cpu: 500
-    runtime: 2h
+    runtime: 4h
   BUSTEDS_MH_direct:
     threads: 32
     runtime: 1d
   RELAX_direct:
     threads: 16
-    runtime: 12h
+    runtime: 1d
   FEL_partition:
     threads: 16
     mem_mb_per_cpu: 500
