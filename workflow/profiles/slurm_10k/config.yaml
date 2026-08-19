@@ -6,7 +6,7 @@ reason: True
 rerun-incomplete: True
 printshellcmds: True
 config:
-  samples_csv: config/curated/aoc_available_samples.csv
+  samples_csv: config/curated/26-08-18-samples.csv
 default-resources:
   runtime: 10
   mem_mb_per_cpu: 2000
@@ -40,10 +40,10 @@ set-resources:
     runtime: 4h
   BUSTEDS_MH_direct:
     threads: 32
-    runtime: 1d
+    runtime: 7d
   RELAX_direct:
     threads: 16
-    runtime: 1d
+    runtime: 3d
   FEL_partition:
     threads: 16
     mem_mb_per_cpu: 500
