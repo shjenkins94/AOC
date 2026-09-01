@@ -1,6 +1,0 @@
-
-
-passive_active_gleaning_ENSG00000215274,ENSG00000215274,resources/sample_labels/passive_active_gleaning_labels.csv
-passive_active_gleaning_ENSG00000224659,ENSG00000224659,resources/sample_labels/passive_active_gleaning_labels.csv
-passive_active_gleaning_ENSG00000237671,ENSG00000237671,resources/sample_labels/passive_active_gleaning_labels.csv
-sample,sequence,sequence_labels_csv

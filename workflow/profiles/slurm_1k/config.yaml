@@ -6,7 +6,7 @@ reason: True
 rerun-incomplete: True
 printshellcmds: True
 config:
-  samples_csv: config/curated/26-08-18-samples-1k.csv
+  samples_csv: config/curated/26-09-01-samples-1k.csv
 default-resources:
   runtime: 10
   mem_mb_per_cpu: 2000
