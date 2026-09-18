@@ -14,7 +14,6 @@ snakemake \
   --rerun-trigger mtime \
   --configfile .tests/integration/config/config.yaml \
 
-
 # Basic checks
 #if [ ! -f tests/tmp_output/summary/run_manifest.csv ]; then
 #  echo "Installation test failed."

@@ -19,6 +19,27 @@ import glob
 import importlib.util
 import sys
 from pathlib import Path
+from snakemake.utils import validate
+from snakemake.exceptions import WorkflowError
+
+def _find_project_root():
+    starts = [Path(__file__).resolve().parent, Path.cwd().resolve()]
+    for start in starts:
+        for candidate in (start, *start.parents):
+            if (candidate / "scripts" / "busteds_mh.py").is_file():
+                return candidate
+    raise FileNotFoundError("Could not find scripts/busteds_mh.py from Snakefile or working directory")
+
+PROJECT_ROOT = _find_project_root()
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+_busteds_mh_path = PROJECT_ROOT / "scripts" / "busteds_mh.py"
+_busteds_mh_spec = importlib.util.spec_from_file_location("aoc_busteds_mh", _busteds_mh_path)
+_busteds_mh = importlib.util.module_from_spec(_busteds_mh_spec)
+_busteds_mh_spec.loader.exec_module(_busteds_mh)
+count_busteds_mh_branches = _busteds_mh.count_busteds_mh_branches
+
 import pandas as pd
 import altair as alt
 from statsmodels.stats.multitest import fdrcorrection
@@ -33,7 +54,9 @@ alt.data_transformers.disable_max_rows()
 ###############################################################################
 
 configfile: "config/config.yaml"
+validate(config, "schemas/config.schema.yaml")
 
+SHARED_SEQUENCE_MODE = config["shared_sequence_mode"]
 SAMPLES_CSV = config.get("samples_csv", "samples.csv")
 SEQUENCES_CSV = config.get("sequences_csv", "sequences.csv")
 
@@ -76,6 +99,14 @@ def _coerce_int(value):
         return int(str(value).strip())
     except (TypeError, ValueError, AttributeError):
         return None
+
+def _is_missing(x):
+    if x is None:
+        return True
+    if isinstance(x, float) and math.isnan(x):
+        return True
+    s = str(x).strip()
+    return (s == "") or (s.lower() == "nan")
 
 PRESERVE_TEST_SEQUENCES = _coerce_bool(PRESERVE_TEST_SEQUENCES_RAW)
 
@@ -129,6 +160,17 @@ if "sequence_labels_csv" not in samples_df.columns:
 
 samples_df["sample"] = samples_df["sample"].astype(str)
 
+if SHARED_SEQUENCE_MODE:
+    try:
+        validate(samples_df, "schemas/per_sequence_samples.schema.yaml")
+    except WorkflowError as e:
+        raise WorkflowError(f"Error validating samples.csv against schema:", e)
+else:
+    try:
+        validate(samples_df, "schemas/per_sample_samples.schema.yaml")
+    except WorkflowError as e:
+        raise WorkflowError(f"Error validating samples.csv against schema:", e)
+
 if "sequence" in samples_df.columns:
     samples_df["sequence"] = samples_df["sequence"].astype(str)
 else:
@@ -148,6 +190,12 @@ else:
             f"paired with sequences_csv={SEQUENCES_CSV!r}"
         )
     sequence_fasta_df = pd.read_csv(SEQUENCES_CSV).copy()
+
+    try:
+        validate(sequence_fasta_df, "schemas/sequences.schema.yaml")
+    except WorkflowError as e:
+        raise WorkflowError(f"Error validating sequences.csv against schema:", e)
+
     required_sequences = {"sequence", "codon_fasta"}
     missing_sequences = required_sequences.difference(sequence_fasta_df.columns)
     if missing_sequences:
@@ -233,22 +281,11 @@ def _hyphy_content_table(data):
 # Utility: ensure empty test list exists for unlabeled samples
 ###############################################################################
 
-def test_list_file(sample):
-    return f"results/{sample}/{sample}.test_sequences.txt"
-
-def _ensure_empty_test_list(sample):
-    p = f"results/{sample}/{sample}.test_sequences.EMPTY.txt"
-    if not os.path.exists(p):
-        os.makedirs(os.path.dirname(p), exist_ok=True)
-        with open(p, "w") as fh:
-            fh.write("")
-    return p
-
 def _test_list_for_sample(wc):
     if LABELS_CSV_BY_SAMPLE.get(wc.sample, False):
         return f"results/{wc.sample}/{wc.sample}.test_sequences.txt"
     else:
-        return _ensure_empty_test_list(wc.sample)
+        return f"results/{wc.sample}/{wc.sample}.test_sequences.EMPTY.txt"
 
 def _branch_arg(sample):
     if LABELS_CSV_BY_SAMPLE.get(sample, False):
@@ -257,7 +294,7 @@ def _branch_arg(sample):
 
 def _preserve_test_list_input(wc):
     if PRESERVE_TEST_SEQUENCES:
-        return [test_list_file(s) for s in SAMPLES_WITH_LABELS_BY_SEQUENCE.get(wc.sequence, [])]
+        return expand("results/{sample}/{sample}.test_sequences.txt", sample = SAMPLES_WITH_LABELS_BY_SEQUENCE.get(wc.sequence, []))
     return []
 
 def _read_preserve_names(path):
@@ -383,18 +420,18 @@ rule macse:
     params:
         launcher=MACSE_LAUNCHER,
         runner=MACSE_RUNNER,
-        xms_mb=MACSE_XMS_MB,
-        xmx_mb=_macse_heap_mb(),
     resources:
         mem_mb=_macse_requested_mem_mb(),
+        xms_mb=MACSE_XMS_MB,
+        xmx_mb=_macse_heap_mb(),
     log:
         "logs/macse.{sequence}.log",
     shell:
         r"""
         bash "{params.runner}" \
           --macse-bin "{params.launcher}" \
-          --xms-mb {params.xms_mb} \
-          --xmx-mb {params.xmx_mb} \
+          --xms-mb {resources.xms_mb} \
+          --xmx-mb {resources.xmx_mb} \
           -- \
           -prog alignSequences \
           -seq "{input.fasta}" \
@@ -487,20 +524,29 @@ rule recombination:
     output:
         gard_json="results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.GARD.json",
         bestgard="results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard",
-    threads: GARD_PROCESSORS
-    params:
-        processors=GARD_PROCESSORS
+    resources:
+        tasks=GARD_PROCESSORS,
     log:
         "logs/recombination.{sequence}.log"
     shell:
         r"""
-        {MPIRUN} -np {params.processors} {HYPHY_MPI} GARD --alignment {input.msa} --rv GDD --output {output.gard_json} --mode Faster ENV='TOLERATE_NUMERICAL_ERRORS=1;' \
+        {MPIRUN} -np {resources.tasks} {HYPHY_MPI} GARD --alignment {input.msa} --rv GDD --output {output.gard_json} --mode Faster ENV='TOLERATE_NUMERICAL_ERRORS=1;' \
           > {log} 2>&1
         """
 
 ###############################################################################
 # Labels -> header map + test list (only used when labels CSV exists)
 ###############################################################################
+
+rule build_empty_test_list:
+    output:
+        touch(os.path.join(str(OUTROOT), "{sample}", "{sample}.test_sequences.EMPTY.txt")),
+    log:
+        os.path.join(LOGDIR, "build_empty_test_list.{sample}.log"),
+    run:
+        with open(log[0], "a") as L:
+            L.write(f"Created empty test list for sample {wildcards.sample}\n")
+
 
 rule build_header_map_and_test_list:
     input:
@@ -510,6 +556,8 @@ rule build_header_map_and_test_list:
         test_txt="results/{sample}/{sample}.test_sequences.txt",
     log:
         "logs/build_header_map_and_test_list.{sample}.log"
+    params:
+        schema="schemas/sequence_labels.schema.yaml"
     run:
         import os, re
         import pandas as pd
@@ -549,6 +597,11 @@ rule build_header_map_and_test_list:
         sample_col = "sample" if "sample" in df.columns else None
         if sample_col is not None:
             df = df[df[sample_col].astype(str).str.strip() == str(wildcards.sample)].copy()
+
+        try:
+            validate(df, params.schema)
+        except WorkflowError as e:
+            raise WorkflowError(f"[build_header_map_and_test_list] Error validating labels CSV against schema:", e)
 
         # heuristic column detection
         label_candidates  = ["label", "group", "set", "class", "foreground", "branchset"]
