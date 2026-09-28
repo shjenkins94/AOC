@@ -41,6 +41,12 @@ set-resources:
   BUSTEDS_MH_direct:
     threads: 32
     runtime: 7d
+  BUSTED_E_S_direct:
+    threads: 32
+    runtime: 7d
+  BUSTED_E_S_MH_direct:
+    threads: 32
+    runtime: 7d
   RELAX_direct:
     threads: 16
     runtime: 3d
