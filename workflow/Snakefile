@@ -883,7 +883,7 @@ rule BUSTED_E_S_direct:
         {HYPHY} BUSTED \
           --alignment {input.aln} \
           --output {output.json} \
-          --grid Yes \
+          --error-sink Yes \
           --srv Yes \
           {params.branch_arg} \
           > {log} 2>&1
@@ -905,7 +905,7 @@ rule BUSTED_E_S_MH_direct:
         {HYPHY} BUSTED \
           --alignment {input.aln} \
           --output {output.json} \
-          --grid Yes \
+          --error-sink Yes \
           --srv Yes \
           --multiple-hits Double+Triple \
           {params.branch_arg} \
