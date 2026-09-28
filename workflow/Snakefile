@@ -382,7 +382,7 @@ rule all:
         # expand("results/{sample}/tables/{sample}.AOC.merged_{test}_Results.csv", sample=SAMPLES, test=["FEL", "MEME", "ABSREL", "BUSTEDS-MH", "RELAX", "CFEL"]),
         # expand("results/{sample}/tables/{sample}.selection_overview.csv", sample=SAMPLES),
 #        expand("results/{sample}/visualizations/{sample}.{test}.merged.png", sample=SAMPLES, test=["MEME"]),
-        # expand("results/{sample}/selection/{test}.json", sample=SAMPLES, test=["MEME", "BUSTEDS-MH", "RELAX"]),
+        expand("results/{sample}/selection/{test}.json", sample=SAMPLES, test=["BUSTED-E-S", "BUSTED-E-S-MH", "RELAX"]),
         # expand("results/{sample}/tables/{sample}.selection_overview.csv", sample=SAMPLES),
         expand("results/{sample}/tables/{sample}.AOC.merged_{test}_Results.csv", sample=SAMPLES, test=["ABSREL"]),
         # expand("results/{sample}/visualizations/{sample}.{test}.merged.png", sample=SAMPLES, test=["MEME"]),
@@ -862,6 +862,50 @@ rule BUSTEDS_MH_direct:
         {HYPHY} BUSTED \
           --alignment {input.aln} \
           --output {output.json} \
+          --srv Yes \
+          --multiple-hits Double+Triple \
+          {params.branch_arg} \
+          > {log} 2>&1
+        """
+
+
+rule BUSTED_E_S_direct:
+    input:
+        aln=rules.rebuild_gard_nexus.output.full_bestgard,
+    output:
+        json="results/{sample}/selection/BUSTED-E-S.json"
+    params:
+        branch_arg=lambda wc: _branch_arg_direct(wc.sample)
+    log:
+        "logs/BUSTED-E-S_direct.{sample}.log"
+    shell:
+        r"""
+        {HYPHY} BUSTED \
+          --alignment {input.aln} \
+          --output {output.json} \
+          --grid Yes \
+          --srv Yes \
+          {params.branch_arg} \
+          > {log} 2>&1
+        """
+
+
+
+rule BUSTED_E_S_MH_direct:
+    input:
+        aln=rules.rebuild_gard_nexus.output.full_bestgard,
+    output:
+        json="results/{sample}/selection/BUSTED-E-S-MH.json"
+    params:
+        branch_arg=lambda wc: _branch_arg_direct(wc.sample)
+    log:
+        "logs/BUSTED-E-S-MH_direct.{sample}.log"
+    shell:
+        r"""
+        {HYPHY} BUSTED \
+          --alignment {input.aln} \
+          --output {output.json} \
+          --grid Yes \
           --srv Yes \
           --multiple-hits Double+Triple \
           {params.branch_arg} \
