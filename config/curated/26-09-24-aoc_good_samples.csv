@@ -26,6 +26,7 @@ edge_ENSG00000111305,ENSG00000111305,resources/sample_labels/edge_labels.csv
 edge_ENSG00000120563,ENSG00000120563,resources/sample_labels/edge_labels.csv
 edge_ENSG00000124091,ENSG00000124091,resources/sample_labels/edge_labels.csv
 edge_ENSG00000127377,ENSG00000127377,resources/sample_labels/edge_labels.csv
+edge_ENSG00000136002,ENSG00000136002,resources/sample_labels/edge_labels.csv
 edge_ENSG00000138161,ENSG00000138161,resources/sample_labels/edge_labels.csv
 edge_ENSG00000151033,ENSG00000151033,resources/sample_labels/edge_labels.csv
 edge_ENSG00000163499,ENSG00000163499,resources/sample_labels/edge_labels.csv
@@ -53,6 +54,7 @@ aerial_ENSG00000120563,ENSG00000120563,resources/sample_labels/aerial_labels.csv
 aerial_ENSG00000122432,ENSG00000122432,resources/sample_labels/aerial_labels.csv
 aerial_ENSG00000124091,ENSG00000124091,resources/sample_labels/aerial_labels.csv
 aerial_ENSG00000127377,ENSG00000127377,resources/sample_labels/aerial_labels.csv
+aerial_ENSG00000136002,ENSG00000136002,resources/sample_labels/aerial_labels.csv
 aerial_ENSG00000138161,ENSG00000138161,resources/sample_labels/aerial_labels.csv
 aerial_ENSG00000151033,ENSG00000151033,resources/sample_labels/aerial_labels.csv
 aerial_ENSG00000158163,ENSG00000158163,resources/sample_labels/aerial_labels.csv
@@ -85,7 +87,6 @@ gleaning_ENSG00000147223,ENSG00000147223,resources/sample_labels/gleaning_labels
 gleaning_ENSG00000149243,ENSG00000149243,resources/sample_labels/gleaning_labels.csv
 gleaning_ENSG00000152034,ENSG00000152034,resources/sample_labels/gleaning_labels.csv
 gleaning_ENSG00000153093,ENSG00000153093,resources/sample_labels/gleaning_labels.csv
-gleaning_ENSG00000160111,ENSG00000160111,resources/sample_labels/gleaning_labels.csv
 gleaning_ENSG00000162836,ENSG00000162836,resources/sample_labels/gleaning_labels.csv
 gleaning_ENSG00000163377,ENSG00000163377,resources/sample_labels/gleaning_labels.csv
 gleaning_ENSG00000164299,ENSG00000164299,resources/sample_labels/gleaning_labels.csv
@@ -105,7 +106,6 @@ gleaning_ENSG00000189064,ENSG00000189064,resources/sample_labels/gleaning_labels
 gleaning_ENSG00000196678,ENSG00000196678,resources/sample_labels/gleaning_labels.csv
 gleaning_ENSG00000197279,ENSG00000197279,resources/sample_labels/gleaning_labels.csv
 gleaning_ENSG00000197798,ENSG00000197798,resources/sample_labels/gleaning_labels.csv
-gleaning_ENSG00000197937,ENSG00000197937,resources/sample_labels/gleaning_labels.csv
 gleaning_ENSG00000198553,ENSG00000198553,resources/sample_labels/gleaning_labels.csv
 gleaning_ENSG00000198556,ENSG00000198556,resources/sample_labels/gleaning_labels.csv
 gleaning_ENSG00000203733,ENSG00000203733,resources/sample_labels/gleaning_labels.csv
@@ -228,6 +228,7 @@ all_ENSG00000111305,ENSG00000111305,
 all_ENSG00000120563,ENSG00000120563,
 all_ENSG00000124091,ENSG00000124091,
 all_ENSG00000127377,ENSG00000127377,
+all_ENSG00000136002,ENSG00000136002,
 all_ENSG00000138161,ENSG00000138161,
 all_ENSG00000151033,ENSG00000151033,
 all_ENSG00000163499,ENSG00000163499,
