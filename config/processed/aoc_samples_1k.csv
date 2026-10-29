@@ -1,7 +1,5 @@
 sample,sequence,sequence_labels_csv
-open_ENSG00000129673,ENSG00000129673,resources/sample_labels/open_labels.csv
 open_ENSG00000173535,ENSG00000173535,resources/sample_labels/open_labels.csv
-open_ENSG00000175485,ENSG00000175485,resources/sample_labels/open_labels.csv
 edge_ENSG00000100053,ENSG00000100053,resources/sample_labels/edge_labels.csv
 edge_ENSG00000100122,ENSG00000100122,resources/sample_labels/edge_labels.csv
 edge_ENSG00000120563,ENSG00000120563,resources/sample_labels/edge_labels.csv
@@ -15,7 +13,6 @@ edge_ENSG00000196431,ENSG00000196431,resources/sample_labels/edge_labels.csv
 edge_ENSG00000204923,ENSG00000204923,resources/sample_labels/edge_labels.csv
 edge_ENSG00000249481,ENSG00000249481,resources/sample_labels/edge_labels.csv
 edge_ENSG00000283324,ENSG00000283324,resources/sample_labels/edge_labels.csv
-edge_ENSG00000284194,ENSG00000284194,resources/sample_labels/edge_labels.csv
 narrow_ENSG00000137078,ENSG00000137078,resources/sample_labels/narrow_labels.csv
 narrow_ENSG00000147588,ENSG00000147588,resources/sample_labels/narrow_labels.csv
 narrow_ENSG00000180425,ENSG00000180425,resources/sample_labels/narrow_labels.csv
@@ -104,9 +101,7 @@ passive_active_gleaning_ENSG00000268009,ENSG00000268009,resources/sample_labels/
 passive_active_gleaning_ENSG00000268447,ENSG00000268447,resources/sample_labels/passive_active_gleaning_labels.csv
 passive_active_gleaning_ENSG00000269791,ENSG00000269791,resources/sample_labels/passive_active_gleaning_labels.csv
 passive_active_gleaning_ENSG00000274274,ENSG00000274274,resources/sample_labels/passive_active_gleaning_labels.csv
-all_ENSG00000129673,ENSG00000129673,
 all_ENSG00000173535,ENSG00000173535,
-all_ENSG00000175485,ENSG00000175485,
 all_ENSG00000100053,ENSG00000100053,
 all_ENSG00000100122,ENSG00000100122,
 all_ENSG00000120563,ENSG00000120563,
@@ -120,7 +115,6 @@ all_ENSG00000196431,ENSG00000196431,
 all_ENSG00000204923,ENSG00000204923,
 all_ENSG00000249481,ENSG00000249481,
 all_ENSG00000283324,ENSG00000283324,
-all_ENSG00000284194,ENSG00000284194,
 all_ENSG00000137078,ENSG00000137078,
 all_ENSG00000147588,ENSG00000147588,
 all_ENSG00000180425,ENSG00000180425,
