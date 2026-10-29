@@ -8,39 +8,13 @@ version = "0.1.0"
 [tasks]
 
 [dependencies]
+snakemake = "7.32.4.*"
 python = "3.11.*"
 pip = "*"
 pyyaml = "*"
 rich = "*"
-tn93 = "1.0.15.*"
 biopython = "1.83.*"
-ete3 = "3.1.2.*"
-macse = "*"
-openjdk = "*"
-fasttree = "2.2.0.*"
 numpy = "*"
 pandas = "*"
-matplotlib = "*"
-statsmodels = "0.14.6.*"
-altair = "5.2.0.*"
-altair_saver = "0.5.0.*"
-vl-convert-python = "1.9.0.*"
 pytest = "*"
 black = ">=26.5.1,<27"
-
-[feature.smk7.dependencies]
-snakemake = "7.32.4.*"
-
-[feature.hyphy-aoc.dependencies]
-hyphy = "2.5.74.*"
-
-[feature.smk9.dependencies]
-snakemake = "~=9.23.1"
-
-[feature.hyphy-latest.dependencies]
-hyphy= "2.5.100.*"
-
-[environments]
-default = ["smk7", "hyphy-aoc"]
-smk9 = ["smk9"]
-hyphy-latest = ["smk7", "hyphy-latest"]
