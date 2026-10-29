@@ -35,6 +35,28 @@ done
 [[ -n "${XMX_MB}" ]] || usage
 [[ $# -gt 0 ]] || usage
 
+macse_java_home="${JAVA_HOME:-}"
+if [[ -z "${macse_java_home}" || ! -x "${macse_java_home}/bin/java" ]]; then
+  if ! java_path="$(type -P java 2>/dev/null)" || [[ "${java_path}" != */* ]]; then
+    error "Could not resolve Java on PATH."
+    error "Activate the conda environment that provides Java for MACSE or set JAVA_HOME."
+    exit 1
+  fi
+  if [[ ! -x "${java_path}" ]]; then
+    error "Resolved Java executable is not executable: ${java_path}"
+    exit 1
+  fi
+  if ! macse_java_home="$(cd "$(dirname "${java_path}")/.." && pwd -P)"; then
+    error "Could not derive JAVA_HOME from Java executable: ${java_path}"
+    exit 1
+  fi
+  if [[ -z "${macse_java_home}" || ! -x "${macse_java_home}/bin/java" ]]; then
+    error "Derived JAVA_HOME does not contain an executable bin/java: ${macse_java_home:-<empty>}"
+    exit 1
+  fi
+fi
+export JAVA_HOME="${macse_java_home}"
+
 if ! macse_path="$(command -v "${MACSE_BIN}")"; then
   error "Could not resolve MACSE launcher '${MACSE_BIN}' on PATH."
   error "Activate the conda environment that provides 'macse' or set 'macse_launcher' to an executable path."
