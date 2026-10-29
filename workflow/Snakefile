@@ -363,30 +363,21 @@ rule strike_ambigs_msa:
 rule remove_duplicates_msa:
     input:
         sa=rules.strike_ambigs_msa.output.sa,
-        preserve_list=_preserve_test_list_input
     output:
         rd="results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa"
     log:
         "logs/remove_duplicates_msa.{sequence}.log"
     container:
         "docker://pegi3s/hyphy:2.5.103"
-    run:
-        preserve_names = _read_preserve_names(input.preserve_list)
-        preserve_arg = ""
-        if PRESERVE_TEST_SEQUENCES and preserve_names:
-            preserve_arg = "--preserve " + ",".join(preserve_names)
-        shell(
-            f"{HYPHY} remove-duplicates --msa {input.sa} {preserve_arg} "
-            f"--output {output.rd} ENV='DATA_FILE_PRINT_FORMAT=9' > {log} 2>&1"
-        )
-        if PRESERVE_TEST_SEQUENCES and preserve_names:
-            _restore_missing_preserved_sequences(input.sa, output.rd, preserve_names, log[0])
-            _assert_preserved_sequences(output.rd, preserve_names)
+    shell:
+        """
+        {HYPHY} remove-duplicates --msa {input.sa} --output {output.rd} ENV='DATA_FILE_PRINT_FORMAT=9' > {log} 2>&1
+        """
+
 
 rule tn93_cluster:
     input:
         rd=rules.remove_duplicates_msa.output.rd,
-        preserve_list=_preserve_test_list_input
     output:
         cluster_json="results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.json",
         cluster_fasta="results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta",
@@ -397,24 +388,17 @@ rule tn93_cluster:
         "logs/tn93_cluster.{sequence}.log"
     container:
         "docker://quay.io/biocontainers/tn93:1.0.9"
-    run:
-        preserve_names = _read_preserve_names(input.preserve_list)
-        preserve_arg = ""
-        if PRESERVE_TEST_SEQUENCES and preserve_names:
-            preserve_arg = f"--preserve_list {input.preserve_list}"
-        shell(
-            f"python {TN93_CLUSTER_PY} "
-            f"--input {input.rd} "
-            f"--output_fasta {output.cluster_fasta} "
-            f"--output_json {output.cluster_json} "
-            f"--threshold {params.threshold} "
-            f"--max_retain {params.max_seqs} "
-            f"{preserve_arg} "
-            f"> {log} 2>&1"
-        )
-        if PRESERVE_TEST_SEQUENCES and preserve_names:
-            _assert_preserved_sequences(output.cluster_fasta, preserve_names)
-
+    shell:
+        """
+        python {TN93_CLUSTER_PY} \
+            --input {input.rd} \
+            --output_fasta {output.cluster_fasta} \
+            --output_json {output.cluster_json} \
+            --threshold {params.threshold} \
+            --max_retain {params.max_seqs} \
+            > {log} 2>&1
+        """
+    
 # rule recombination:
 #     input:
 #         msa=rules.tn93_cluster.output.cluster_fasta
