@@ -312,7 +312,9 @@ rule macse:
         xms_mb=MACSE_XMS_MB,
         xmx_mb=_macse_heap_mb(),
     log:
-        "logs/macse.{sequence}.log",
+        "logs/macse/macse.{sequence}.log",
+    container:
+        "docker://quay.io/biocontainers/macse:2.07-0"
     shell:
         r"""
         bash "{MACSE_RUNNER}" \
@@ -337,6 +339,8 @@ rule cln:
         cln="results/sequences/{sequence}/{sequence}.codons.cln.fa"
     log:
         "logs/cln.{sequence}.log"
+    container:
+        "docker://pegi3s/hyphy:2.5.103"
     shell:
         r"""
         {HYPHY} CLN Universal {input.codons} 'No/No' {output.cln} > {log} 2>&1
@@ -349,6 +353,8 @@ rule strike_ambigs_msa:
         sa="results/sequences/{sequence}/{sequence}.SA.codons.cln.fa"
     log:
         "logs/strike_ambigs_msa.{sequence}.log"
+    container:
+        "docker://pegi3s/hyphy:2.5.103"
     shell:
         r"""
         {HYPHY} {STRIKE_AMBIGS_BF} --alignment {input.cln} --output {output.sa} > {log} 2>&1
@@ -362,6 +368,8 @@ rule remove_duplicates_msa:
         rd="results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa"
     log:
         "logs/remove_duplicates_msa.{sequence}.log"
+    container:
+        "docker://pegi3s/hyphy:2.5.103"
     run:
         preserve_names = _read_preserve_names(input.preserve_list)
         preserve_arg = ""
@@ -387,6 +395,8 @@ rule tn93_cluster:
         max_seqs=lambda wc: config.get("tn93_max_seqs", 20),
     log:
         "logs/tn93_cluster.{sequence}.log"
+    container:
+        "docker://quay.io/biocontainers/tn93:1.0.9"
     run:
         preserve_names = _read_preserve_names(input.preserve_list)
         preserve_arg = ""
