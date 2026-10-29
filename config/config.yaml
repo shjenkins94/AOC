@@ -11,6 +11,7 @@ sequences_csv: config/aoc_sequences.csv
 
 # External executables
 # Leave these as-is if the tools are available on PATH in the AOC environment.
+hyphy_3: hyphy3
 hyphy: hyphy
 hyphy_mpi: HYPHYMPI
 mpirun: mpirun

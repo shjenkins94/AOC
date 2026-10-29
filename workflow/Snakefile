@@ -33,6 +33,7 @@ SAMPLES_CSV = config.get("samples_csv", "samples.csv")
 SEQUENCES_CSV = config.get("sequences_csv", "sequences.csv")
 
 # Tools / scripts (override in config/config.yaml as needed)
+HYPHY_3      = config.get("hyphy_3", "hyphy3")
 HYPHY        = config.get("hyphy", "hyphy")
 HYPHY_MPI    = config.get("hyphy_mpi", "HYPHYMPI")
 MPIRUN       = config.get("mpirun", "mpirun")
