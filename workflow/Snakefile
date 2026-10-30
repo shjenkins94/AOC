@@ -413,7 +413,7 @@ rule recombination:
         "docker://sjenkins94/hyphy3:v1.1"
     shell:
         r"""
-        {HYPHY_3} GARD -t {threads} --alignment {input.msa} --output {output.gard_json} > {log} 2>&1
+        {HYPHY_3} GARD -t {threads} --alignment {input.msa} --legacy-json --output {output.gard_json} > {log} 2>&1
         """
 
 # ###############################################################################
