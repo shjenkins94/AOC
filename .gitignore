@@ -22,3 +22,6 @@ __pycache__/
 # Error files that pop up sometimes
 errors.log
 errors.log.mpinode0
+
+# Singularity
+.singularity_cache

@@ -5,7 +5,8 @@ name = "AOC"
 platforms = ["linux-64"]
 version = "0.1.0"
 
-[tasks]
+[activation.env]
+SINGULARITY_CACHEDIR = "$PWD/.singularity_cache"
 
 [dependencies]
 snakemake = "7.32.4.*"

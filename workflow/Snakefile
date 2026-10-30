@@ -386,6 +386,8 @@ rule tn93_cluster:
         max_seqs=lambda wc: config.get("tn93_max_seqs", 20),
     log:
         "logs/tn93_cluster/tn93_cluster.{sequence}.log"
+    container:
+        "docker://sjenkins94/aoc-tn93:0.2"
     shell:
         """
         python {TN93_CLUSTER_PY} \
@@ -408,7 +410,7 @@ rule recombination:
     log:
         "logs/recombination/recombination.{sequence}.log"
     container:
-        "docker://sjenkins94/hyphy3:v1.0"
+        "docker://sjenkins94/hyphy3:v1.1"
     shell:
         r"""
         {HYPHY_3} GARD -t {threads} --alignment {input.msa} --output {output.gard_json} > {log} 2>&1
