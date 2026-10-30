@@ -288,8 +288,8 @@ rule all:
         # expand("results/sequences/{sequence}/{sequence}.codons.cln.fa", sequence=SEQUENCES),
         # expand("results/sequences/{sequence}/{sequence}.SA.codons.cln.fa", sequence=SEQUENCES),
         # expand("results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa", sequence=SEQUENCES),
-        expand("results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta", sequence=SEQUENCES),
-        # expand("results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard", sequence=SEQUENCES),
+        # expand("results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta", sequence=SEQUENCES),
+        expand("results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard", sequence=SEQUENCES),
         # expand("results/{sample}/{sample}.test_sequences.txt", sample=SAMPLES_WITH_LABELS),
         # expand("results/{sample}/{sample}.sequence_header_map.csv", sample=SAMPLES_WITH_LABELS),
         # expand("results/sequences/{sequence}/gard/segments.json", sequence=SEQUENCES),
@@ -397,20 +397,22 @@ rule tn93_cluster:
             > {log} 2>&1
         """
     
-# rule recombination:
-#     input:
-#         msa=rules.tn93_cluster.output.cluster_fasta
-#     output:
-#         gard_json=protected("results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.GARD.json"),
-#         bestgard=protected("results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard"),
-#     threads:
-#         GARD_PROCESSORS
-#     log:
-#         "logs/recombination.{sequence}.log"
-#     shell:
-#         r"""
-#         {HYPHY_3} GARD -t {threads} --alignment {input.msa} --output {output.gard_json} > {log} 2>&1
-#         """
+rule recombination:
+    input:
+        msa=rules.tn93_cluster.output.cluster_fasta
+    output:
+        gard_json=protected("results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.GARD.json"),
+        bestgard=protected("results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa.cluster.fasta.best-gard"),
+    threads:
+        GARD_PROCESSORS
+    log:
+        "logs/recombination/recombination.{sequence}.log"
+    container:
+        "docker://sjenkins94/hyphy3:1.0"
+    shell:
+        r"""
+        {HYPHY_3} GARD -t {threads} --alignment {input.msa} --output {output.gard_json} > {log} 2>&1
+        """
 
 # ###############################################################################
 # # Labels -> header map + test list (only used when labels CSV exists)
