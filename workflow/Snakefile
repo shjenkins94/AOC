@@ -408,7 +408,7 @@ rule recombination:
     log:
         "logs/recombination/recombination.{sequence}.log"
     container:
-        "docker://sjenkins94/hyphy3:1.0"
+        "docker://sjenkins94/hyphy3:v1.0"
     shell:
         r"""
         {HYPHY_3} GARD -t {threads} --alignment {input.msa} --output {output.gard_json} > {log} 2>&1
