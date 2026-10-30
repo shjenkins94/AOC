@@ -1,7 +1,10 @@
 use-singularity: True
+singularity-args: "--bind /lustre10:/lustre10 --bind /home/shjenkinsku:/home/shjenkinsku"
 jobs: 100
 latency-wait: 60
 keep-going: True
 reason: True
 rerun-incomplete: True
 printshellcmds: True
+config:
+  samples_csv: config/aoc_sample.csv

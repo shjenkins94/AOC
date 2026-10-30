@@ -13,6 +13,7 @@ environments:
     - url: https://conda.anaconda.org/bioconda/
     packages:
       linux-64:
+      - conda: https://conda.anaconda.org/bioconda/linux-64/tn93-1.1.0-hc52dbad_0.conda
       - conda: https://conda.anaconda.org/bioconda/noarch/snakemake-7.32.4-hdfd78af_1.tar.bz2
       - conda: https://conda.anaconda.org/bioconda/noarch/snakemake-minimal-7.32.4-pyhdfd78af_1.tar.bz2
       - conda: https://conda.anaconda.org/conda-forge/linux-64/_openmp_mutex-4.5-20_gnu.conda
@@ -216,6 +217,22 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/wheel-0.48.0-pyhd8ed1ab_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/yte-1.9.4-pyhd8ed1ab_0.conda
 packages:
+- conda: https://conda.anaconda.org/bioconda/linux-64/tn93-1.1.0-hc52dbad_0.conda
+  sha256: 69cb4efc1e690881f7238b863d26fc67760162e171595a88601cfe4933e7d68c
+  md5: 2f02d5c22d1edc2cfe27d8fbdfe95268
+  depends:
+  - __glibc >=2.17,<3.0.a0
+  - _openmp_mutex >=4.5
+  - libgcc >=14
+  - libgomp
+  - libstdcxx >=14
+  license: MIT
+  license_family: MIT
+  run_exports:
+    weak:
+    - tn93 >=1.1.0,<2.0a0
+  size: 149800
+  timestamp: 1791485875935
 - conda: https://conda.anaconda.org/bioconda/noarch/snakemake-7.32.4-hdfd78af_1.tar.bz2
   sha256: 8dc8f431daec891d6778316327349b753716b86326247e35f3e9e2c0f62d3e24
   md5: c258081e11b1009312b8ab18cb1efc4a

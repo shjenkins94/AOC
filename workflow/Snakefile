@@ -314,7 +314,7 @@ rule macse:
     log:
         "logs/macse/macse.{sequence}.log",
     container:
-        "docker://quay.io/biocontainers/macse:2.07-0"
+        "docker://quay.io/biocontainers/macse:2.07--hdfd78af_0"
     shell:
         r"""
         bash "{MACSE_RUNNER}" \
@@ -338,12 +338,12 @@ rule cln:
     output:
         cln="results/sequences/{sequence}/{sequence}.codons.cln.fa"
     log:
-        "logs/cln.{sequence}.log"
+        "logs/cln/cln.{sequence}.log"
     container:
         "docker://pegi3s/hyphy:2.5.103"
     shell:
         r"""
-        {HYPHY} CLN Universal {input.codons} 'No/No' {output.cln} > {log} 2>&1
+        {HYPHY} CLN --code Universal --alignment {input.codons} --filtering-method 'No/No' --output {output.cln} > {log} 2>&1
         """
 
 rule strike_ambigs_msa:
@@ -352,7 +352,7 @@ rule strike_ambigs_msa:
     output:
         sa="results/sequences/{sequence}/{sequence}.SA.codons.cln.fa"
     log:
-        "logs/strike_ambigs_msa.{sequence}.log"
+        "logs/strike_ambigs_msa/strike_ambigs_msa.{sequence}.log"
     container:
         "docker://pegi3s/hyphy:2.5.103"
     shell:
@@ -366,7 +366,7 @@ rule remove_duplicates_msa:
     output:
         rd="results/sequences/{sequence}/{sequence}.RD.SA.codons.cln.fa"
     log:
-        "logs/remove_duplicates_msa.{sequence}.log"
+        "logs/remove_duplicates_msa/remove_duplicates_msa.{sequence}.log"
     container:
         "docker://pegi3s/hyphy:2.5.103"
     shell:
@@ -385,9 +385,7 @@ rule tn93_cluster:
         threshold=lambda wc: config.get("tn93_threshold", 0.01),
         max_seqs=lambda wc: config.get("tn93_max_seqs", 20),
     log:
-        "logs/tn93_cluster.{sequence}.log"
-    container:
-        "docker://quay.io/biocontainers/tn93:1.0.9"
+        "logs/tn93_cluster/tn93_cluster.{sequence}.log"
     shell:
         """
         python {TN93_CLUSTER_PY} \
@@ -670,7 +668,7 @@ rule tn93_cluster:
 #     log:
 #         "logs/fasttree_partition.{sequence}.part{part}.log"
 #     container:
-#         "docker://quay.io/biocontainers/fasttree:2.2.0"
+#         "docker://quay.io/biocontainers/fasttree:2.2.0--h7b50bb2_1"
 #     shell:
 #         r"""
 #         {FASTTREE} -nt -gtr {input.aln} > {output.tree} 2> {log}
